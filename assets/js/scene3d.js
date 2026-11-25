@@ -32,6 +32,7 @@ export class Kontrakan3DScene {
     this.hoveredUnitId = null;
 
     this.transition = null;
+    this.lastComplexWidth = 38;
     this.overviewCamPos = new THREE.Vector3(0, 11.5, 29.5);
     this.overviewTarget = new THREE.Vector3(0, 2.2, 0.5);
 
@@ -79,10 +80,17 @@ export class Kontrakan3DScene {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.065;
+    this.controls.rotateSpeed = 0.75;
+    this.controls.zoomSpeed = 0.9;
+    this.controls.panSpeed = 0.75;
+    this.controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
     this.controls.target.copy(this.overviewTarget);
     this.controls.maxPolarAngle = Math.PI / 2 - 0.04;
     this.controls.minDistance = 6;
-    this.controls.maxDistance = 60;
+    this.controls.maxDistance = 75;
     this.controls.update();
 
     this.worldGroup = new THREE.Group();
@@ -507,18 +515,54 @@ export class Kontrakan3DScene {
     this._createGardenLamp(0, 0.04, D / 2 + TD + 7.6);
     this._createGardenLamp(rightMostX - 1.5, 0.04, D / 2 + TD + 7.6);
 
-    // Posisi kamera overview otomatis menyesuaikan lebar total 3 bangunan
-    const camZ = Math.max(27.5, totalComplexWidth * 0.72);
-    this.overviewTarget.set(0, 2.2, 0.5);
-    this.overviewCamPos.set(0, 11.2, camZ);
+    // Simpan lebar kompleks dan hitung framing adaptif untuk Mobile, Tablet, dan Desktop
+    this.lastComplexWidth = totalComplexWidth;
+    this._updateResponsiveCameraFraming(!this.activeUnitId);
 
-    if (!this.activeUnitId) {
+    this.setNightMode(this.isNightMode);
+  }
+
+  /**
+   * Menyesuaikan FOV & jarak kamera overview secara otomatis untuk Mobile (portrait), Tablet, dan Desktop
+   */
+  _updateResponsiveCameraFraming(applyImmediately = false) {
+    const w = this.container.clientWidth || window.innerWidth;
+    const h = this.container.clientHeight || window.innerHeight;
+    const aspect = w / Math.max(h, 1);
+    const complexW = this.lastComplexWidth || 38;
+
+    let fov = 46;
+    let camY = 11.2;
+    let camZ = Math.max(27.5, complexW * 0.72);
+    let targetY = 2.2;
+
+    if (aspect < 0.72) {
+      // Smartphone Portrait: lebarkan FOV & mundurkan kamera agar 3 blok terlihat utuh
+      fov = 56;
+      camY = 15.5;
+      camZ = Math.max(44, complexW * 1.18);
+      targetY = 1.6;
+    } else if (aspect < 1.15) {
+      // Tablet Portrait / Square
+      fov = 52;
+      camY = 13.0;
+      camZ = Math.max(34, complexW * 0.90);
+      targetY = 2.0;
+    }
+
+    this.camera.fov = fov;
+    this.camera.aspect = aspect;
+    this.camera.updateProjectionMatrix();
+
+    this.overviewTarget.set(0, targetY, 0.5);
+    this.overviewCamPos.set(0, camY, camZ);
+    this.controls.maxDistance = Math.max(65, camZ + 22);
+
+    if (applyImmediately && !this.activeUnitId && !this.transition) {
       this.camera.position.copy(this.overviewCamPos);
       this.controls.target.copy(this.overviewTarget);
       this.controls.update();
     }
-
-    this.setNightMode(this.isNightMode);
   }
 
   /**
@@ -1373,9 +1417,8 @@ export class Kontrakan3DScene {
     window.addEventListener('resize', () => {
       const w = this.container.clientWidth || window.innerWidth;
       const h = this.container.clientHeight || window.innerHeight;
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
       this.renderer.setSize(w, h);
+      this._updateResponsiveCameraFraming(!this.activeUnitId);
     });
   }
 

@@ -33,6 +33,18 @@
     payments: ['Jadwal Pembayaran', 'Atur jadwal jatuh tempo bulanan, konfirmasi lunas, dan kirim pengingat WhatsApp'],
   };
 
+  function setMobileNavOpen(open) {
+    const sidebar = document.getElementById('admin-sidebar');
+    const backdrop = document.getElementById('admin-backdrop');
+    if (open) {
+      sidebar.classList.remove('-translate-x-full');
+      backdrop.classList.remove('hidden');
+    } else {
+      sidebar.classList.add('-translate-x-full');
+      backdrop.classList.add('hidden');
+    }
+  }
+
   function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     const div = document.createElement('div');
@@ -41,7 +53,7 @@
         ? 'bg-rose-600 border-rose-400/50 text-white'
         : 'bg-slate-800 border-emerald-400/50 text-emerald-100';
     div.className = `pointer-events-auto px-4 py-3 rounded-xl border shadow-2xl text-xs font-semibold flex items-center gap-2 transition-all duration-300 ${colors}`;
-    div.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-xmark' : 'fa-circle-check text-emerald-400'}"></i><span>${escapeHtml(message)}</span>`;
+    div.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-xmark' : 'fa-circle-check text-emerald-400'} shrink-0"></i><span>${escapeHtml(message)}</span>`;
     container.appendChild(div);
     setTimeout(() => {
       div.style.opacity = '0';
@@ -70,16 +82,28 @@
     document.querySelectorAll('.tab-panel').forEach((sec) => {
       sec.classList.toggle('hidden', sec.id !== `tab-${tabName}`);
     });
+
+    // Sync Desktop Sidebar tabs
     document.querySelectorAll('.nav-tab').forEach((btn) => {
       const active = btn.getAttribute('data-tab') === tabName;
       btn.className = active
-        ? 'nav-tab w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30 transition'
-        : 'nav-tab w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent transition';
+        ? 'nav-tab w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30 transition'
+        : 'nav-tab w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent transition';
     });
+
+    // Sync Mobile/Tablet Bottom Tab Bar
+    document.querySelectorAll('.bottom-nav-tab').forEach((btn) => {
+      const active = btn.getAttribute('data-tab') === tabName;
+      btn.className = active
+        ? 'bottom-nav-tab flex flex-col items-center justify-center py-1.5 rounded-xl text-sky-400 bg-sky-500/15 transition'
+        : 'bottom-nav-tab flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-400 hover:text-white transition';
+    });
+
     const [title, sub] = tabMeta[tabName] || tabMeta.overview;
     document.getElementById('page-title').textContent = title;
     document.getElementById('page-subtitle').textContent = sub;
-    document.getElementById('admin-sidebar').classList.add('-translate-x-full');
+    setMobileNavOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function loadAllData() {
@@ -99,9 +123,9 @@
       state.paymentSummary = paymentsRes.summary || {};
 
       renderOverview();
-      renderUnitsTable();
-      renderTenantsTable();
-      renderPaymentsTable();
+      renderUnitsViews();
+      renderTenantsViews();
+      renderPaymentsViews();
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -116,12 +140,11 @@
     document.getElementById('kpi-total-units').textContent = `${total} Unit`;
     document.getElementById('kpi-occupancy-sub').textContent = `${terisi} terisi • ${kosong} kosong`;
     document.getElementById('kpi-paid-amount').textContent = formatRupiah(state.paymentSummary.total_lunas || 0);
-    document.getElementById('kpi-paid-count').textContent = `${state.paymentSummary.count_lunas || 0} unit sudah lunas`;
+    document.getElementById('kpi-paid-count').textContent = `${state.paymentSummary.count_lunas || 0} unit lunas`;
     document.getElementById('kpi-unpaid-amount').textContent = formatRupiah(state.paymentSummary.total_belum || 0);
-    document.getElementById('kpi-unpaid-count').textContent = `${state.paymentSummary.count_belum || 0} belum bayar • ${state.paymentSummary.count_telat || 0} telat`;
+    document.getElementById('kpi-unpaid-count').textContent = `${state.paymentSummary.count_belum || 0} belum • ${state.paymentSummary.count_telat || 0} telat`;
     document.getElementById('kpi-potential').textContent = formatRupiah(potensi);
 
-    // Pending payments list
     const pending = state.payments.filter((p) => p.status !== 'lunas');
     const pendingEl = document.getElementById('overview-pending-list');
     if (pending.length === 0) {
@@ -131,19 +154,21 @@
         .map((p) => {
           const isLate = p.status === 'telat';
           return `
-            <div class="p-4 flex items-center justify-between gap-3 hover:bg-white/[0.02]">
+            <div class="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-white/[0.02]">
               <div class="flex items-center gap-3 min-w-0">
                 <span class="w-9 h-9 rounded-xl ${isLate ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'} font-extrabold text-xs flex items-center justify-center shrink-0">
                   #${String(p.nomor_unit).padStart(2, '0')}
                 </span>
                 <div class="min-w-0">
                   <div class="text-sm font-bold text-white truncate">${escapeHtml(p.nama_penghuni)}</div>
-                  <div class="text-xs text-slate-400">Jatuh tempo: <span class="${isLate ? 'text-rose-400 font-semibold' : 'text-slate-300'}">${escapeHtml(p.jatuh_tempo)}</span> • ${formatRupiah(p.nominal)}</div>
+                  <div class="text-[11px] sm:text-xs text-slate-400 truncate">
+                    Tempo: <span class="${isLate ? 'text-rose-400 font-semibold' : 'text-slate-300'}">${escapeHtml(p.jatuh_tempo)}</span> • ${formatRupiah(p.nominal)}
+                  </div>
                 </div>
               </div>
               <button type="button" data-quick-pay="${p.id}"
-                class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white border border-emerald-500/30 text-xs font-bold shrink-0 transition">
-                Tandai Lunas
+                class="px-3 py-2 sm:py-1.5 rounded-xl sm:rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white border border-emerald-500/30 text-xs font-bold shrink-0 transition">
+                Lunas
               </button>
             </div>
           `;
@@ -151,7 +176,6 @@
         .join('');
     }
 
-    // Quick unit status grid
     const gridEl = document.getElementById('overview-units-grid');
     gridEl.innerHTML = state.units
       .map((u) => {
@@ -163,36 +187,43 @@
             : 'bg-sky-500/15 border-sky-500/35 hover:border-sky-400';
         return `
           <button type="button" data-edit-unit="${u.id}" class="p-3 rounded-xl border text-left transition ${cls}">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-1">
               <span class="font-extrabold text-sm text-white">#${String(u.nomor_unit).padStart(2, '0')}</span>
               <span class="text-[10px] font-semibold uppercase ${u.status === 'kosong' ? 'text-emerald-300' : u.status === 'maintenance' ? 'text-amber-300' : 'text-sky-300'}">${u.status === 'kosong' ? 'Kosong' : u.status === 'maintenance' ? 'Renov' : 'Terisi'}</span>
             </div>
             <div class="text-[11px] text-slate-200 truncate mt-1">${escapeHtml(u.nama_penghuni || 'Tersedia')}</div>
-            <div class="text-[11px] font-bold text-slate-300 mt-0.5">${formatRupiah(u.harga_bulanan)}</div>
+            <div class="text-[11px] font-bold text-slate-300 mt-0.5 truncate">${formatRupiah(u.harga_bulanan)}</div>
           </button>
         `;
       })
       .join('');
   }
 
-  function renderUnitsTable() {
+  function getUnitMeta(u) {
+    const blokLabel =
+      u.blok === 'memanjang_4'
+        ? 'Blok A: Deret 4 • Lt. 1'
+        : u.blok === 'memanjang_2'
+        ? 'Blok B: Deret 2 Terpisah • Lt. 1'
+        : `Blok C: Bertingkat • Lt. ${u.lantai}`;
+
+    const stBadge =
+      u.status === 'kosong'
+        ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Kosong</span>`
+        : u.status === 'maintenance'
+        ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">Perbaikan</span>`
+        : `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">Terisi</span>`;
+
+    return { blokLabel, stBadge };
+  }
+
+  function renderUnitsViews() {
     const tbody = document.getElementById('units-table-body');
+    const cardsEl = document.getElementById('units-mobile-cards');
+
     tbody.innerHTML = state.units
       .map((u) => {
-        const blokLabel =
-          u.blok === 'memanjang_4'
-            ? 'Blok A: Deret 4 • Lt. 1'
-            : u.blok === 'memanjang_2'
-            ? 'Blok B: Deret 2 Terpisah • Lt. 1'
-            : `Blok C: Bertingkat • Lt. ${u.lantai}`;
-
-        const stBadge =
-          u.status === 'kosong'
-            ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Kosong</span>`
-            : u.status === 'maintenance'
-            ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">Perbaikan</span>`
-            : `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">Terisi</span>`;
-
+        const { blokLabel, stBadge } = getUnitMeta(u);
         const occupantHtml = u.nama_penghuni
           ? `<div class="font-semibold text-white text-xs">${escapeHtml(u.nama_penghuni)}</div>
              <div class="text-[11px] text-slate-400">Publik: ${escapeHtml(u.penghuni_publik)} • Tempo tgl ${u.tanggal_jatuh_tempo}</div>`
@@ -207,7 +238,7 @@
                 </span>
                 <div>
                   <div class="font-bold text-white text-sm">${escapeHtml(u.nama_unit)}</div>
-                  <div class="text-[11px] text-slate-400">${escapeHtml(u.ukuran || '3.5 x 6 m')}</div>
+                  <div class="text-[11px] text-slate-400">${escapeHtml(u.ukuran || '3.5 x 7 m')}</div>
                 </div>
               </div>
             </td>
@@ -235,12 +266,64 @@
         `;
       })
       .join('');
+
+    // Mobile Cards
+    cardsEl.innerHTML = state.units
+      .map((u) => {
+        const { blokLabel, stBadge } = getUnitMeta(u);
+        return `
+          <div class="bg-slate-950/70 border border-white/10 rounded-2xl p-4 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-sm text-white shrink-0" style="background:${escapeHtml(u.warna_aksen || '#2563eb')}">
+                  #${String(u.nomor_unit).padStart(2, '0')}
+                </span>
+                <div class="min-w-0">
+                  <div class="font-bold text-white text-sm truncate">${escapeHtml(u.nama_unit)}</div>
+                  <div class="text-[11px] text-slate-400 truncate">${blokLabel}</div>
+                </div>
+              </div>
+              <div class="shrink-0">${stBadge}</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-xs">
+              <div>
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">Harga / Bulan</div>
+                <div class="font-extrabold text-sky-300 text-sm mt-0.5">${formatRupiah(u.harga_bulanan)}</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">Penghuni</div>
+                <div class="font-semibold text-white truncate mt-0.5">${escapeHtml(u.nama_penghuni || 'Kosong')}</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+              <button type="button" data-edit-unit="${u.id}"
+                class="flex-1 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-white text-xs font-bold transition">
+                <i class="fa-solid fa-pen-to-square mr-1"></i>Edit / Harga
+              </button>
+              <button type="button" data-assign-unit="${u.id}"
+                class="flex-1 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-white text-xs font-bold transition">
+                <i class="fa-solid fa-user-pen mr-1"></i>Penghuni
+              </button>
+              <button type="button" data-delete-unit="${u.id}" aria-label="Hapus Unit"
+                class="w-10 h-10 rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-300 hover:text-white text-xs flex items-center justify-center shrink-0 transition">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
   }
 
-  function renderTenantsTable() {
+  function renderTenantsViews() {
     const tbody = document.getElementById('tenants-table-body');
+    const cardsEl = document.getElementById('tenants-mobile-cards');
+
     if (state.tenants.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-xs text-slate-400">Belum ada data penghuni untuk filter ini.</td></tr>`;
+      cardsEl.innerHTML = `<div class="py-8 text-center text-xs text-slate-400">Belum ada data penghuni untuk filter ini.</div>`;
       return;
     }
 
@@ -286,12 +369,61 @@
         `;
       })
       .join('');
+
+    cardsEl.innerHTML = state.tenants
+      .map((t) => {
+        const wa = formatWaNumber(t.no_hp);
+        const isAktif = t.status === 'aktif';
+        return `
+          <div class="bg-slate-950/70 border border-white/10 rounded-2xl p-4 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 text-xs font-extrabold">#${String(t.nomor_unit).padStart(2, '0')}</span>
+                  <span class="font-bold text-white text-sm truncate">${escapeHtml(t.nama_penghuni)}</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-1">Tampilan Publik 3D: <span class="text-sky-200 font-semibold">${escapeHtml(t.penghuni_publik || '-')}</span></div>
+              </div>
+              ${
+                wa
+                  ? `<a href="https://wa.me/${wa}" target="_blank" class="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0"><i class="fa-brands fa-whatsapp text-base"></i></a>`
+                  : ''
+              }
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-xs">
+              <div>
+                <div class="text-[10px] text-slate-400">Masuk</div>
+                <div class="text-slate-200 font-medium">${escapeHtml(t.tanggal_masuk)}</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-slate-400">Jatuh Tempo</div>
+                <div class="text-amber-300 font-bold">Tiap tgl ${t.tanggal_jatuh_tempo}</div>
+              </div>
+            </div>
+
+            ${
+              isAktif
+                ? `<div class="flex items-center gap-2 pt-1">
+                     <button type="button" data-assign-unit="${t.unit_id}" class="flex-1 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-white text-xs font-bold transition">Edit Penghuni</button>
+                     <button type="button" data-checkout-unit="${t.unit_id}" data-tenant-name="${escapeHtml(t.nama_penghuni)}" class="flex-1 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold transition">Checkout</button>
+                   </div>`
+                : `<div class="text-[11px] text-slate-500 pt-1">Status: Keluar (${escapeHtml(t.tanggal_keluar || '-')})</div>`
+            }
+          </div>
+        `;
+      })
+      .join('');
   }
 
-  function renderPaymentsTable() {
+  function renderPaymentsViews() {
     const tbody = document.getElementById('payments-table-body');
+    const cardsEl = document.getElementById('payments-mobile-cards');
+
     if (state.payments.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-xs text-slate-400">Belum ada jadwal pembayaran untuk periode ${escapeHtml(state.periode)}. Klik tombol <strong>"Generate Jadwal Bulan Ini"</strong> di atas.</td></tr>`;
+      const emptyMsg = `Belum ada jadwal pembayaran untuk periode ${escapeHtml(state.periode)}. Ketuk tombol <strong>"Generate"</strong> di atas.`;
+      tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-xs text-slate-400">${emptyMsg}</td></tr>`;
+      cardsEl.innerHTML = `<div class="py-8 px-4 text-center text-xs text-slate-400">${emptyMsg}</div>`;
       return;
     }
 
@@ -341,6 +473,67 @@
         `;
       })
       .join('');
+
+    cardsEl.innerHTML = state.payments
+      .map((p) => {
+        const badge =
+          p.status === 'lunas'
+            ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Lunas</span>`
+            : p.status === 'telat'
+            ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">Telat</span>`
+            : `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">Belum Bayar</span>`;
+
+        const wa = formatWaNumber(p.no_hp);
+        const waText = encodeURIComponent(
+          `Halo Kak ${p.nama_penghuni}, izin mengingatkan jadwal pembayaran sewa Kontrakan Teh Amoy Unit #${String(p.nomor_unit).padStart(2, '0')} untuk periode ${p.periode_bulan} sebesar ${formatRupiah(p.nominal)} dengan jatuh tempo tanggal ${p.jatuh_tempo}. Terima kasih.`
+        );
+
+        return `
+          <div class="bg-slate-950/70 border border-white/10 rounded-2xl p-4 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-bold text-white text-sm truncate">#${String(p.nomor_unit).padStart(2, '0')} • ${escapeHtml(p.nama_penghuni)}</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Periode ${escapeHtml(p.periode_bulan)}</div>
+              </div>
+              <div class="shrink-0">${badge}</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-xs">
+              <div>
+                <div class="text-[10px] text-slate-400">Nominal</div>
+                <div class="font-extrabold text-sky-300 text-sm">${formatRupiah(p.nominal)}</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-slate-400">Jatuh Tempo</div>
+                <div class="font-bold ${p.status === 'telat' ? 'text-rose-400' : 'text-slate-200'}">${escapeHtml(p.jatuh_tempo)}</div>
+              </div>
+            </div>
+
+            ${
+              p.tanggal_bayar
+                ? `<div class="text-[11px] text-emerald-300/90"><i class="fa-solid fa-check-double mr-1"></i>Dibayar ${escapeHtml(p.tanggal_bayar)} (${escapeHtml(p.metode_bayar || 'Tunai')})</div>`
+                : ''
+            }
+
+            <div class="flex items-center gap-2 pt-1">
+              ${
+                p.status !== 'lunas'
+                  ? `<button type="button" data-quick-pay="${p.id}" class="flex-1 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white text-xs font-bold transition">Tandai Lunas</button>`
+                  : ''
+              }
+              <button type="button" data-edit-pay="${p.id}" class="flex-1 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-white text-xs font-bold transition">
+                <i class="fa-solid fa-calendar-pen mr-1"></i>Atur Jadwal
+              </button>
+              ${
+                wa && p.status !== 'lunas'
+                  ? `<a href="https://wa.me/${wa}?text=${waText}" target="_blank" aria-label="Pengingat WA" class="w-10 h-10 rounded-xl bg-green-500/15 hover:bg-green-500 text-green-300 hover:text-white flex items-center justify-center shrink-0 transition"><i class="fa-brands fa-whatsapp text-base"></i></a>`
+                  : ''
+              }
+            </div>
+          </div>
+        `;
+      })
+      .join('');
   }
 
   // =========================================================================
@@ -362,10 +555,10 @@
     document.getElementById('unit-nama').value = `Kontrakan ${String(maxNum + 1).padStart(2, '0')}`;
     document.getElementById('unit-harga').value = 850000;
     document.getElementById('unit-layout-pos').value = 'memanjang_4:1';
-    document.getElementById('unit-ukuran').value = '3.5 x 6 m';
+    document.getElementById('unit-ukuran').value = '3.5 x 7 m';
     document.getElementById('unit-warna').value = '#2563eb';
     document.getElementById('unit-status').value = 'kosong';
-    document.getElementById('unit-fasilitas').value = 'Kamar Mandi Dalam, Dapur Mini, Token Listrik 1300W, Parkir Motor';
+    document.getElementById('unit-fasilitas').value = 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik';
     document.getElementById('unit-deskripsi').value = 'Unit kontrakan baru nyaman dan siap huni.';
     document.getElementById('sync-price-wrap').classList.add('hidden');
     openModal('modal-unit');
@@ -380,7 +573,7 @@
     document.getElementById('unit-nama').value = u.nama_unit;
     document.getElementById('unit-harga').value = u.harga_bulanan;
     document.getElementById('unit-layout-pos').value = `${u.blok}:${u.lantai}`;
-    document.getElementById('unit-ukuran').value = u.ukuran || '3.5 x 6 m';
+    document.getElementById('unit-ukuran').value = u.ukuran || '3.5 x 7 m';
     document.getElementById('unit-warna').value = u.warna_aksen || '#2563eb';
     document.getElementById('unit-status').value = u.status;
     document.getElementById('unit-fasilitas').value = u.fasilitas || '';
@@ -438,7 +631,7 @@
   // =========================================================================
   // EVENTS
   // =========================================================================
-  document.querySelectorAll('.nav-tab').forEach((btn) => {
+  document.querySelectorAll('.nav-tab, .bottom-nav-tab').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab')));
   });
 
@@ -450,12 +643,9 @@
     btn.addEventListener('click', () => closeModal(btn.getAttribute('data-close-modal')));
   });
 
-  document.getElementById('btn-open-nav').addEventListener('click', () => {
-    document.getElementById('admin-sidebar').classList.remove('-translate-x-full');
-  });
-  document.getElementById('btn-close-nav').addEventListener('click', () => {
-    document.getElementById('admin-sidebar').classList.add('-translate-x-full');
-  });
+  document.getElementById('btn-open-nav').addEventListener('click', () => setMobileNavOpen(true));
+  document.getElementById('btn-close-nav').addEventListener('click', () => setMobileNavOpen(false));
+  document.getElementById('admin-backdrop').addEventListener('click', () => setMobileNavOpen(false));
 
   document.getElementById('btn-open-add-unit').addEventListener('click', openAddUnitModal);
   document.getElementById('btn-add-unit-secondary').addEventListener('click', openAddUnitModal);
@@ -473,7 +663,6 @@
   document.getElementById('tenant-status-filter').addEventListener('change', loadAllData);
   document.getElementById('payment-status-filter').addEventListener('change', loadAllData);
 
-  // Delegated click handlers for dynamic buttons
   document.addEventListener('click', async (e) => {
     const editUnitBtn = e.target.closest('[data-edit-unit]');
     if (editUnitBtn) {
@@ -547,7 +736,6 @@
     }
   });
 
-  // Form Submit: Unit
   document.getElementById('form-unit').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('unit-id').value;
@@ -580,7 +768,6 @@
     }
   });
 
-  // Form Submit: Tenant
   document.getElementById('form-tenant').addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = {
@@ -605,7 +792,6 @@
     }
   });
 
-  // Form Submit: Payment
   document.getElementById('form-payment').addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = {
@@ -631,7 +817,6 @@
     }
   });
 
-  // Generate Monthly Payments
   document.getElementById('btn-generate-payments').addEventListener('click', async () => {
     try {
       const res = await api('../api/payments.php', {
@@ -645,7 +830,6 @@
     }
   });
 
-  // Logout
   document.getElementById('btn-logout').addEventListener('click', async () => {
     await fetch('../api/auth.php', {
       method: 'POST',

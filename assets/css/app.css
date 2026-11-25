@@ -1,12 +1,14 @@
-/* Custom Styles for Kontrakan Teh Amoy */
+/* Responsive & Glassmorphism Styles for Kontrakan Teh Amoy */
 
 :root {
-  --glass-bg: rgba(15, 23, 42, 0.72);
+  --glass-bg: rgba(15, 23, 42, 0.78);
+  --glass-bg-strong: rgba(15, 23, 42, 0.92);
   --glass-border: rgba(255, 255, 255, 0.14);
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -20,10 +22,11 @@ html, body {
   position: fixed;
   inset: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: linear-gradient(180deg, #7dd3fc 0%, #bae6fd 50%, #e0f2fe 100%);
   user-select: none;
+  touch-action: none;
 }
 
 #scene-container canvas {
@@ -31,9 +34,10 @@ html, body {
   width: 100%;
   height: 100%;
   outline: none;
+  touch-action: none;
 }
 
-/* Floating 3D Unit Badges */
+/* Floating 3D Unit Badges — Adaptive for Mobile, Tablet & Desktop */
 #labels-layer {
   position: fixed;
   inset: 0;
@@ -49,22 +53,23 @@ html, body {
   transform: translate(-50%, -100%);
   pointer-events: auto;
   cursor: pointer;
-  background: rgba(15, 23, 42, 0.84);
+  background: rgba(15, 23, 42, 0.86);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 12px;
   padding: 6px 10px;
-  min-width: 126px;
+  min-width: 124px;
+  max-width: 155px;
   color: #f8fafc;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
-  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, opacity 0.25s ease;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.35);
+  transition: background 0.18s ease, border-color 0.18s ease, opacity 0.22s ease;
   will-change: transform, opacity;
 }
 
 .unit-label-3d:hover {
-  background: rgba(15, 23, 42, 0.96);
-  border-color: rgba(56, 189, 248, 0.85);
+  background: rgba(15, 23, 42, 0.97);
+  border-color: rgba(56, 189, 248, 0.9);
   z-index: 30;
 }
 
@@ -78,19 +83,48 @@ html, body {
   height: 0;
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
-  border-top: 6px solid rgba(15, 23, 42, 0.86);
+  border-top: 6px solid rgba(15, 23, 42, 0.88);
+}
+
+/* Tablet compact label */
+@media (max-width: 1023px) {
+  .unit-label-3d {
+    min-width: 102px;
+    max-width: 124px;
+    padding: 5px 8px;
+    border-radius: 10px;
+  }
+}
+
+/* Mobile ultra-crisp pill label to prevent overlapping */
+@media (max-width: 639px) {
+  .unit-label-3d {
+    min-width: 78px;
+    max-width: 96px;
+    padding: 4px 6px;
+    border-radius: 9px;
+  }
+  .unit-label-3d .label-status-text {
+    display: none;
+  }
+  .unit-label-3d::after {
+    bottom: -5px;
+    border-left-width: 5px;
+    border-right-width: 5px;
+    border-top-width: 5px;
+  }
 }
 
 .unit-label-3d.is-kosong {
-  border-color: rgba(52, 211, 153, 0.55);
+  border-color: rgba(52, 211, 153, 0.65);
 }
 
 .unit-label-3d.is-terisi {
-  border-color: rgba(96, 165, 250, 0.55);
+  border-color: rgba(96, 165, 250, 0.6);
 }
 
 .unit-label-3d.is-maintenance {
-  border-color: rgba(251, 191, 36, 0.55);
+  border-color: rgba(251, 191, 36, 0.65);
 }
 
 .unit-label-3d.hidden-label {
@@ -101,16 +135,25 @@ html, body {
 /* Glass panel helpers */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
 }
 
-.glass-panel-light {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+.glass-panel-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+/* Safe area padding for iOS & Android gesture bars */
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.safe-bottom-bar {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 /* Custom sleek scrollbar */
@@ -124,18 +167,18 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
+  background: rgba(148, 163, 184, 0.42);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.75);
+  background: rgba(148, 163, 184, 0.72);
 }
 
 /* Pulse dot for status */
 @keyframes softPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.18); }
+  50% { opacity: 0.55; transform: scale(1.22); }
 }
 
 .status-dot-pulse {
