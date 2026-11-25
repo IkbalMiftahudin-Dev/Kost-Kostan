@@ -28,12 +28,39 @@ function jsonResponse(array $payload, int $statusCode = 200): void
 
 function getJsonBody(): array
 {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
     $raw = file_get_contents('php://input');
     if (!$raw) {
-        return [];
+        $cached = [];
+        return $cached;
     }
     $decoded = json_decode($raw, true);
-    return is_array($decoded) ? $decoded : [];
+    $cached = is_array($decoded) ? $decoded : [];
+    return $cached;
+}
+
+/**
+ * Mendukung HTTP Method Override (POST + _method: PUT/DELETE) agar 100% kompatibel
+ * di shared hosting seperti InfinityFree yang sering memblokir PUT/DELETE.
+ */
+function getEffectiveMethod(): string
+{
+    $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    if ($method === 'POST') {
+        $override = $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] ?? '';
+        if ($override === '') {
+            $body = getJsonBody();
+            $override = (string)($body['_method'] ?? ($_POST['_method'] ?? ''));
+        }
+        $override = strtoupper(trim($override));
+        if (in_array($override, ['PUT', 'DELETE', 'PATCH'], true)) {
+            return $override;
+        }
+    }
+    return $method;
 }
 
 function isAdminLoggedIn(): bool
@@ -80,7 +107,9 @@ function maskTenantName(?string $fullName): ?string
     }
     $firstName = $parts[0];
     $lastWord = end($parts);
-    $initial = mb_strtoupper(mb_substr($lastWord, 0, 1, 'UTF-8'), 'UTF-8');
+    $initial = function_exists('mb_substr')
+        ? mb_strtoupper(mb_substr($lastWord, 0, 1, 'UTF-8'), 'UTF-8')
+        : strtoupper(substr($lastWord, 0, 1));
     return $firstName . ' ' . $initial . '.';
 }
 
@@ -93,7 +122,7 @@ function buildDueDateForPeriod(string $periodeBulan, int $dueDay): string
         $year = (int)$m[1];
         $month = (int)$m[2];
     }
-    $maxDay = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+    $maxDay = (int)date('t', mktime(0, 0, 0, $month, 1, $year));
     $day = max(1, min($dueDay, $maxDay));
     return sprintf('%04d-%02d-%02d', $year, $month, $day);
 }

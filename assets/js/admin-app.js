@@ -62,9 +62,23 @@
   }
 
   async function api(path, options = {}) {
+    const reqOptions = { ...options };
+    const method = String(reqOptions.method || 'GET').toUpperCase();
+
+    // Gunakan POST + _method override agar 100% aman di shared hosting (InfinityFree)
+    if (method === 'PUT' || method === 'DELETE') {
+      reqOptions.method = 'POST';
+      let bodyObj = {};
+      if (typeof reqOptions.body === 'string' && reqOptions.body.trim()) {
+        try { bodyObj = JSON.parse(reqOptions.body); } catch (_) { bodyObj = {}; }
+      }
+      bodyObj._method = method;
+      reqOptions.body = JSON.stringify(bodyObj);
+    }
+
     const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-      ...options,
+      headers: { 'Content-Type': 'application/json', ...(reqOptions.headers || {}) },
+      ...reqOptions,
     });
     if (res.status === 401) {
       window.location.href = 'login.php';

@@ -5,7 +5,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/helpers.php';
 
 requireAdminApi();
-$method = $_SERVER['REQUEST_METHOD'];
+$method = getEffectiveMethod();
 
 try {
     $pdo = getDB();

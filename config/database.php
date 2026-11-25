@@ -2,14 +2,26 @@
 declare(strict_types=1);
 
 /**
- * Konfigurasi Database MySQL (XAMPP) + Auto-Bootstrap Schema & Seeder 9 Kontrakan Awal
+ * Konfigurasi Database MySQL (XAMPP Lokal & Hosting InfinityFree / cPanel)
+ * - Prioritas 1: config/env.php (khusus hosting, di-ignore Git)
+ * - Prioritas 2: Environment variables (Railway/Docker)
+ * - Prioritas 3: Default XAMPP lokal (127.0.0.1 / root / kosong)
  */
 
-define('DB_HOST', '127.0.0.1');
-define('DB_PORT', '3306');
-define('DB_NAME', 'kontrakan_teh_amoy');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+$localEnv = [];
+$envFile = __DIR__ . '/env.php';
+if (is_file($envFile)) {
+    $loaded = require $envFile;
+    if (is_array($loaded)) {
+        $localEnv = $loaded;
+    }
+}
+
+define('DB_HOST', (string)($localEnv['DB_HOST'] ?? getenv('DB_HOST') ?: (getenv('MYSQLHOST') ?: '127.0.0.1')));
+define('DB_PORT', (string)($localEnv['DB_PORT'] ?? getenv('DB_PORT') ?: (getenv('MYSQLPORT') ?: '3306')));
+define('DB_NAME', (string)($localEnv['DB_NAME'] ?? getenv('DB_NAME') ?: (getenv('MYSQLDATABASE') ?: 'kontrakan_teh_amoy')));
+define('DB_USER', (string)($localEnv['DB_USER'] ?? getenv('DB_USER') ?: (getenv('MYSQLUSER') ?: 'root')));
+define('DB_PASS', (string)($localEnv['DB_PASS'] ?? (getenv('DB_PASS') !== false ? getenv('DB_PASS') : (getenv('MYSQLPASSWORD') !== false ? getenv('MYSQLPASSWORD') : ''))));
 
 function getDB(): PDO
 {
@@ -28,8 +40,9 @@ function getDB(): PDO
         $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
         $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
     } catch (PDOException $e) {
-        // Jika database belum ada (error code 1049), buat database otomatis lalu konek ulang
-        if ((int)($e->errorInfo[1] ?? 0) === 1049) {
+        $isLocalHost = in_array(DB_HOST, ['127.0.0.1', 'localhost'], true);
+        // Di XAMPP lokal, jika database belum ada (1049), buat database otomatis lalu konek ulang
+        if ($isLocalHost && (int)($e->errorInfo[1] ?? 0) === 1049) {
             $rootDsn = sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT);
             $rootPdo = new PDO($rootDsn, DB_USER, DB_PASS, $options);
             $rootPdo->exec("CREATE DATABASE IF NOT EXISTS `" . DB_NAME . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -225,7 +238,8 @@ function seedInitialData(PDO $pdo): void
         $tenantStmt->execute([$unitId, $nama, $hp, $tglMasuk, $dueDay]);
         $tenantId = (int)$pdo->lastInsertId();
 
-        $safeDay = min($dueDay, (int)cal_days_in_month(CAL_GREGORIAN, $currentMonNum, $currentYear));
+        $maxDays = (int)date('t', mktime(0, 0, 0, $currentMonNum, 1, $currentYear));
+        $safeDay = min($dueDay, $maxDays);
         $jatuhTempoDate = sprintf('%04d-%02d-%02d', $currentYear, $currentMonNum, $safeDay);
         $tglBayar = ($payStatus === 'lunas') ? $jatuhTempoDate : null;
         $catatan = $payStatus === 'lunas' ? 'Pembayaran tepat waktu' : ($payStatus === 'telat' ? 'Mohon segera dikonfirmasi' : 'Jadwal tagihan bulan berjalan');
