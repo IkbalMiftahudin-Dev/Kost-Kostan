@@ -1,12 +1,26 @@
-# OS & Editor files
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# Next.js build output
+/.next/
+/out/
+/build
+
+# Environment files (NEVER commit secrets!)
+.env
+.env*.local
+
+# Vercel
+.vercel
+
+# Logs & OS files
+*.log
 .DS_Store
 Thumbs.db
 desktop.ini
 .vscode/
 .idea/
-*.swp
-*.log
-
-# Hosting credentials & upload bundles (NEVER commit to GitHub)
-config/env.php
 *.zip
+next-env.d.ts

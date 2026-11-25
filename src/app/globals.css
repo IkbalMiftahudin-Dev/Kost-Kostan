@@ -1,4 +1,6 @@
-/* Responsive & Glassmorphism Styles for Kontrakan Teh Amoy */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --glass-bg: rgba(15, 23, 42, 0.78);
@@ -9,12 +11,6 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
-}
-
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
 /* 3D Canvas Container */
@@ -86,7 +82,6 @@ html, body {
   border-top: 6px solid rgba(15, 23, 42, 0.88);
 }
 
-/* Tablet compact label */
 @media (max-width: 1023px) {
   .unit-label-3d {
     min-width: 102px;
@@ -96,7 +91,6 @@ html, body {
   }
 }
 
-/* Mobile ultra-crisp pill label to prevent overlapping */
 @media (max-width: 639px) {
   .unit-label-3d {
     min-width: 78px;
@@ -132,7 +126,6 @@ html, body {
   pointer-events: none;
 }
 
-/* Glass panel helpers */
 .glass-panel {
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
@@ -147,7 +140,6 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-/* Safe area padding for iOS & Android gesture bars */
 .safe-bottom {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
@@ -156,7 +148,6 @@ html, body {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
-/* Custom sleek scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -175,7 +166,6 @@ html, body {
   background: rgba(148, 163, 184, 0.72);
 }
 
-/* Pulse dot for status */
 @keyframes softPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.55; transform: scale(1.22); }
