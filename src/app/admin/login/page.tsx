@@ -107,11 +107,9 @@ export default function AdminLoginPage() {
           <div className="mt-6 pt-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
             <Link href="/" className="hover:text-sky-300 transition flex items-center gap-1.5 font-medium">
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Kembali ke 3D User</span>
+              <span>Kembali ke Halaman Utama</span>
             </Link>
-            <span className="text-slate-500">
-              Default: <code className="text-slate-300">admin</code> / <code className="text-slate-300">admin123</code>
-            </span>
+            <span className="text-slate-500">Akses khusus pengelola</span>
           </div>
         </div>
       </div>
