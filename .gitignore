@@ -23,4 +23,5 @@ desktop.ini
 .vscode/
 .idea/
 *.zip
+*.tsbuildinfo
 next-env.d.ts
