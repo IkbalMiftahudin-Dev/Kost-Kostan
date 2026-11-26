@@ -63,7 +63,7 @@ export function formatWaNumber(hp: string | null | undefined): string {
 }
 
 export function formatBlockLabel(blok: string, lantai: number): string {
-  if (blok === 'bertingkat') return `Blok Bertingkat (Kiri) • Lt. ${lantai}`;
-  if (blok === 'memanjang_4') return 'Blok 4 Memanjang (Kanan) • Lt. 1';
-  return 'Blok 2 Terpisah (Belakang Rumah) • Lt. 1';
+  if (blok === 'bertingkat') return `Blok Bertingkat • Lt. ${lantai}`;
+  if (blok === 'memanjang_4') return 'Blok 4 Melebar (Kanan Bertingkat) • Lt. 1';
+  return 'Blok 2 Terpisah (Belakang Rumah Utama) • Lt. 1';
 }

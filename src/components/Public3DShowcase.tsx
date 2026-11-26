@@ -14,6 +14,7 @@ import {
   Info,
   List,
   LogOut,
+  MapPin,
   Moon,
   Search,
   Shield,
@@ -383,6 +384,17 @@ export default function Public3DShowcase() {
             <Compass className="w-3.5 h-3.5 text-emerald-300" />
           </button>
 
+          <a
+            href="https://maps.app.goo.gl/jueJMjUPuNPdtNwk9"
+            target="_blank"
+            rel="noreferrer"
+            title="Buka Lokasi di Google Maps"
+            className="inline-flex items-center glass-panel hover:bg-slate-800/90 text-white px-2.5 sm:px-3 py-2.5 rounded-xl text-xs font-semibold shadow-lg transition"
+          >
+            <MapPin className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden lg:inline ml-1.5">Maps</span>
+          </a>
+
           <Link
             href="/admin"
             className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white px-3 sm:px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition"
@@ -450,7 +462,7 @@ export default function Public3DShowcase() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-extrabold text-white">Daftar Kontrakan</h2>
-              <p className="text-[11px] text-slate-400">Bertingkat Kiri • 4 Kanan • 2 Belakang Rumah</p>
+              <p className="text-[11px] text-slate-400">Bertingkat + 4 Kanan • 2 Belakang Rumah Utama</p>
             </div>
             <button
               type="button"
