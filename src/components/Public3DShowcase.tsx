@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatBlockLabel, formatRupiah, formatShortRupiah } from '@/lib/helpers';
-import { Kontrakan3DScene } from '@/lib/scene3d';
+import { INTERIOR_ROOMS, Kontrakan3DScene, type InteriorRoomKey } from '@/lib/scene3d';
 import type { PublicUnit } from '@/lib/types';
 
 export default function Public3DShowcase() {
@@ -46,6 +46,7 @@ export default function Public3DShowcase() {
   const [isCutaway, setIsCutaway] = useState(false);
 
   const [activeUnit, setActiveUnit] = useState<PublicUnit | null>(null);
+  const [activeRoom, setActiveRoom] = useState<InteriorRoomKey>('depan');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(false);
@@ -94,6 +95,7 @@ export default function Public3DShowcase() {
     const scene = new Kontrakan3DScene(container, {
       onEnterUnit: (unit) => {
         setActiveUnit(unit);
+        setActiveRoom('depan');
         setIsCutaway(false);
         const desktop = window.innerWidth >= 1024;
         setDetailOpen(desktop);
@@ -101,8 +103,13 @@ export default function Public3DShowcase() {
       },
       onExitUnit: () => {
         setActiveUnit(null);
+        setActiveRoom('depan');
         setIsCutaway(false);
         setDetailOpen(false);
+      },
+      onRoomChange: (room) => {
+        setActiveRoom(room);
+        setIsCutaway(false);
       },
       onFrameUpdate: () => updateLabelPositions(),
     });
@@ -443,7 +450,7 @@ export default function Public3DShowcase() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-extrabold text-white">Daftar Kontrakan</h2>
-              <p className="text-[11px] text-slate-400">4 Memanjang • 2 Terpisah • 1 Bawah + 2 Atas</p>
+              <p className="text-[11px] text-slate-400">Bertingkat Kiri • 4 Kanan • 2 Belakang Rumah</p>
             </div>
             <button
               type="button"
@@ -546,9 +553,32 @@ export default function Public3DShowcase() {
         </div>
       </aside>
 
-      {/* Interior Navigation Dock (When inside a 3D unit) */}
+      {/* Interior Navigation Dock + Per-Room Walkthrough Switcher */}
       {activeUnit && (
-        <div className="fixed bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 w-[calc(100vw-1.5rem)] sm:w-auto max-w-xl safe-bottom">
+        <div className="fixed bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 w-[calc(100vw-1.25rem)] sm:w-auto max-w-xl safe-bottom space-y-2">
+          {/* Baris 1: Pilih Ruangan (Ruang Depan / Ruang Tengah / Lorong Dapur / Kamar Mandi) */}
+          <div className="glass-panel-strong px-2 py-1.5 rounded-2xl shadow-xl flex items-center justify-between sm:justify-center gap-1 overflow-x-auto">
+            {INTERIOR_ROOMS.map((room, idx) => {
+              const isCurrent = !isCutaway && activeRoom === room.key;
+              return (
+                <button
+                  key={room.key}
+                  type="button"
+                  onClick={() => sceneRef.current?.goToRoom(room.key)}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition shrink-0 ${
+                    isCurrent
+                      ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30'
+                      : 'text-slate-300 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span className="opacity-70 mr-1">{idx + 1}.</span>
+                  {room.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Baris 2: Aksi Utama (Keluar, Denah 3D, Info Mobile, Unit Prev/Next) */}
           <div className="glass-panel-strong px-2 sm:px-3 py-2 rounded-2xl shadow-2xl flex items-center justify-between sm:justify-center gap-1.5 sm:gap-2">
             <button
               type="button"
@@ -656,7 +686,7 @@ export default function Public3DShowcase() {
                   ? 'Sedang Perbaikan'
                   : 'Sudah Ditempati'}
               </span>
-              <span className="text-[11px] text-slate-400">Geser 360°</span>
+              <span className="text-[11px] text-slate-400">360° • Klik titik lantai / WASD</span>
             </div>
 
             <div className="mt-4 p-3.5 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-400/30">

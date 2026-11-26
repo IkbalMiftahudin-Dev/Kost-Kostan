@@ -2,9 +2,30 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { PublicUnit } from './types';
 
+export type InteriorRoomKey = 'depan' | 'tengah' | 'dapur' | 'kamar_mandi';
+
+export interface RoomSpotInfo {
+  key: InteriorRoomKey;
+  label: string;
+}
+
+export const INTERIOR_ROOMS: RoomSpotInfo[] = [
+  { key: 'depan', label: 'Ruang Depan' },
+  { key: 'tengah', label: 'Ruang Tengah' },
+  { key: 'dapur', label: 'Lorong Dapur' },
+  { key: 'kamar_mandi', label: 'Kamar Mandi' },
+];
+
+interface RoomCameraPreset {
+  pos: THREE.Vector3;
+  target: THREE.Vector3;
+  hotspotPos: THREE.Vector3;
+}
+
 interface UnitObjectEntry {
   unit: PublicUnit;
   group: THREE.Group;
+  origin: THREE.Vector3;
   blockRoof: THREE.Group | null;
   doorPivot: THREE.Group;
   doorTargetAngle: number;
@@ -14,15 +35,16 @@ interface UnitObjectEntry {
   labelAnchor: THREE.Vector3;
   doorApproachPos: THREE.Vector3;
   doorApproachTarget: THREE.Vector3;
-  interiorCamPos: THREE.Vector3;
-  interiorTarget: THREE.Vector3;
   cutawayCamPos: THREE.Vector3;
   cutawayTarget: THREE.Vector3;
+  rooms: Record<InteriorRoomKey, RoomCameraPreset>;
+  hotspots: Map<InteriorRoomKey, THREE.Group>;
 }
 
 interface TransitionState {
-  type: 'enter' | 'exit' | 'cutaway' | 'reset';
+  type: 'enter' | 'exit' | 'cutaway' | 'reset' | 'room';
   unitId?: number;
+  roomKey?: InteriorRoomKey;
   elapsed: number;
   duration: number;
   waypointsPos: THREE.Vector3[];
@@ -39,18 +61,23 @@ export interface ProjectedLabel {
 export interface SceneCallbacks {
   onEnterUnit?: (unit: PublicUnit) => void;
   onExitUnit?: () => void;
+  onRoomChange?: (room: InteriorRoomKey) => void;
   onFrameUpdate?: () => void;
 }
 
 /**
- * Kontrakan3DScene (TypeScript / Next.js)
- * - 3 Bangunan Terpisah:
- *   • Blok A (memanjang_4): 4 unit memanjang Lt. 1 (#01 - #04)
- *   • Blok B (memanjang_2): 2 unit memanjang TERPISAH Lt. 1 (#05 - #06)
- *   • Blok C (bertingkat): 1 bawah (#07) + tangga & carport + 2 atas (#08 - #09) + balkon
- * - Interior Persis Video Asli (krem peach, plint abu gelap, keramik putih, sekat kusen cokelat tua,
- *   jendela 2 daun + 2 boven, meja dapur cor + keramik backsplash, kamar mandi keramik biru-abu)
- * - Unit KOSONG 100% kosongan polos tanpa kasur/peralatan apapun
+ * Kontrakan3DScene (Next.js / TypeScript)
+ * Layout Lingkungan Asli:
+ * - Paling Kiri (depan): Gedung Bertingkat (#07 bawah + tangga, #08 & #09 atas + balkon)
+ * - Sebelah Kanan Bertingkat (depan): Deret 4 Memanjang (#01 - #04)
+ * - Sebelah Kanan Deret 4 (depan): Rumah Pemilik Kost (Rumah Teh Amoy)
+ * - Di Belakang Rumah Pemilik Kost: 2 Rumah Penghalang/Tetangga
+ * - Di Belakang 2 Rumah Tersebut (terpisah via gang akses samping): Blok 2 Terpisah (#05 & #06)
+ *
+ * Fitur Interior Multi-Ruangan:
+ * - 4 Spot Ruangan (Ruang Depan, Ruang Tengah, Lorong Dapur, Kamar Mandi) via tombol HUD & titik lantai 3D
+ * - Putar 360° mulus di setiap ruangan tanpa tembus tembok + kontrol gerak bebas WASD / Arrow keys
+ * - Mode Denah 3D (Cutaway)
  */
 export class Kontrakan3DScene {
   private container: HTMLElement;
@@ -75,6 +102,7 @@ export class Kontrakan3DScene {
 
   private unitObjects = new Map<number, UnitObjectEntry>();
   private clickableMeshes: THREE.Mesh[] = [];
+  private hotspotMeshes: THREE.Mesh[] = [];
   private porchLights: Array<{ light: THREE.PointLight; bulbMat: THREE.MeshStandardMaterial }> = [];
   private windowGlowMats: THREE.MeshPhysicalMaterial[] = [];
   private blockRoofs: THREE.Group[] = [];
@@ -82,12 +110,16 @@ export class Kontrakan3DScene {
   public isNightMode = false;
   public isCutawayMode = false;
   public activeUnitId: number | null = null;
+  public activeRoom: InteriorRoomKey = 'depan';
   private hoveredUnitId: number | null = null;
+  private hoveredHotspot: THREE.Mesh | null = null;
 
   private transition: TransitionState | null = null;
-  private lastComplexWidth = 38;
-  private overviewCamPos = new THREE.Vector3(0, 11.5, 29.5);
-  private overviewTarget = new THREE.Vector3(0, 2.2, 0.5);
+  private lastComplexWidth = 42;
+  private lastComplexCenterX = 0;
+  private lastComplexCenterZ = -5;
+  private overviewCamPos = new THREE.Vector3(0, 19, 32);
+  private overviewTarget = new THREE.Vector3(0, 1.5, -5);
 
   private readonly ROOM_W = 4.0;
   private readonly ROOM_H = 3.15;
@@ -98,8 +130,10 @@ export class Kontrakan3DScene {
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
   private pointerDownPos = { x: 0, y: 0 };
+  private keysPressed = new Set<string>();
 
   private clock = new THREE.Clock();
+  private elapsedTotal = 0;
   private animFrameId = 0;
   private disposed = false;
 
@@ -107,6 +141,8 @@ export class Kontrakan3DScene {
   private handlePointerDownBound: (e: PointerEvent) => void;
   private handlePointerMoveBound: (e: PointerEvent) => void;
   private handlePointerUpBound: (e: PointerEvent) => void;
+  private handleKeyDownBound: (e: KeyboardEvent) => void;
+  private handleKeyUpBound: (e: KeyboardEvent) => void;
 
   constructor(container: HTMLElement, callbacks: SceneCallbacks = {}) {
     this.container = container;
@@ -116,6 +152,8 @@ export class Kontrakan3DScene {
     this.handlePointerDownBound = this._onPointerDown.bind(this);
     this.handlePointerMoveBound = this._onPointerMove.bind(this);
     this.handlePointerUpBound = this._onPointerUp.bind(this);
+    this.handleKeyDownBound = this._onKeyDown.bind(this);
+    this.handleKeyUpBound = this._onKeyUp.bind(this);
 
     this._initRenderer();
     this._initSceneAndLights();
@@ -127,12 +165,12 @@ export class Kontrakan3DScene {
   private _initRenderer() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x93c5fd);
-    this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.0095);
+    this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.0075);
 
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
 
-    this.camera = new THREE.PerspectiveCamera(46, w / h, 0.08, 200);
+    this.camera = new THREE.PerspectiveCamera(48, w / h, 0.08, 240);
     this.camera.position.copy(this.overviewCamPos);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -147,8 +185,8 @@ export class Kontrakan3DScene {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.065;
-    this.controls.rotateSpeed = 0.75;
+    this.controls.dampingFactor = 0.07;
+    this.controls.rotateSpeed = 0.72;
     this.controls.zoomSpeed = 0.9;
     this.controls.panSpeed = 0.75;
     this.controls.touches = {
@@ -158,7 +196,7 @@ export class Kontrakan3DScene {
     this.controls.target.copy(this.overviewTarget);
     this.controls.maxPolarAngle = Math.PI / 2 - 0.04;
     this.controls.minDistance = 6;
-    this.controls.maxDistance = 75;
+    this.controls.maxDistance = 85;
     this.controls.update();
 
     this.worldGroup = new THREE.Group();
@@ -167,17 +205,17 @@ export class Kontrakan3DScene {
 
   private _initSceneAndLights() {
     this.hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x64748b, 0.88);
-    this.hemiLight.position.set(0, 32, 0);
+    this.hemiLight.position.set(0, 36, 0);
     this.scene.add(this.hemiLight);
 
     this.sunLight = new THREE.DirectionalLight(0xfffbeb, 1.5);
-    this.sunLight.position.set(20, 30, 24);
+    this.sunLight.position.set(22, 36, 26);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.width = 2048;
     this.sunLight.shadow.mapSize.height = 2048;
     this.sunLight.shadow.camera.near = 2;
-    this.sunLight.shadow.camera.far = 110;
-    const d = 38;
+    this.sunLight.shadow.camera.far = 130;
+    const d = 46;
     this.sunLight.shadow.camera.left = -d;
     this.sunLight.shadow.camera.right = d;
     this.sunLight.shadow.camera.top = d;
@@ -186,12 +224,11 @@ export class Kontrakan3DScene {
     this.scene.add(this.sunLight);
 
     this.fillLight = new THREE.DirectionalLight(0xdbeafe, 0.48);
-    this.fillLight.position.set(-18, 12, 18);
+    this.fillLight.position.set(-20, 14, 18);
     this.scene.add(this.fillLight);
   }
 
   private _initTextures() {
-    // 1. Lantai Keramik Putih 40x40cm
     const tileCanvas = document.createElement('canvas');
     tileCanvas.width = 256;
     tileCanvas.height = 256;
@@ -209,7 +246,6 @@ export class Kontrakan3DScene {
     this.tileTexture.wrapT = THREE.RepeatWrapping;
     this.tileTexture.repeat.set(3.5, 6);
 
-    // 2. Keramik Backsplash Dapur
     const bsCanvas = document.createElement('canvas');
     bsCanvas.width = 256;
     bsCanvas.height = 256;
@@ -229,7 +265,6 @@ export class Kontrakan3DScene {
     this.kitchenBacksplashTex.wrapT = THREE.RepeatWrapping;
     this.kitchenBacksplashTex.repeat.set(2, 2);
 
-    // 3. Lantai Kamar Mandi Motif Kotak Biru-Abu
     const bfCanvas = document.createElement('canvas');
     bfCanvas.width = 256;
     bfCanvas.height = 256;
@@ -253,7 +288,6 @@ export class Kontrakan3DScene {
     this.bathFloorTex.wrapT = THREE.RepeatWrapping;
     this.bathFloorTex.repeat.set(2.2, 2.2);
 
-    // 4. Dinding Kamar Mandi Motif Abu-Abu
     const bwCanvas = document.createElement('canvas');
     bwCanvas.width = 256;
     bwCanvas.height = 256;
@@ -278,7 +312,6 @@ export class Kontrakan3DScene {
     this.bathWallTex.wrapT = THREE.RepeatWrapping;
     this.bathWallTex.repeat.set(2.5, 2.5);
 
-    // 5. Genteng Atap
     const roofCanvas = document.createElement('canvas');
     roofCanvas.width = 256;
     roofCanvas.height = 256;
@@ -300,7 +333,6 @@ export class Kontrakan3DScene {
     this.roofTexture.wrapT = THREE.RepeatWrapping;
     this.roofTexture.repeat.set(5, 2);
 
-    // 6. Halaman Paving
     const paveCanvas = document.createElement('canvas');
     paveCanvas.width = 256;
     paveCanvas.height = 256;
@@ -320,7 +352,7 @@ export class Kontrakan3DScene {
     this.paveTexture = new THREE.CanvasTexture(paveCanvas);
     this.paveTexture.wrapS = THREE.RepeatWrapping;
     this.paveTexture.wrapT = THREE.RepeatWrapping;
-    this.paveTexture.repeat.set(18, 10);
+    this.paveTexture.repeat.set(20, 14);
   }
 
   private _makeNumberPlateTexture(nomorUnit: number, status: string): THREE.CanvasTexture {
@@ -347,28 +379,28 @@ export class Kontrakan3DScene {
     return tex;
   }
 
-  private _makeSignboardTexture(title: string, subtitle: string): THREE.CanvasTexture {
+  private _makeSignboardTexture(title: string, subtitle: string, bgTop = '#0f172a', bgBot = '#1e3a8a', border = '#38bdf8'): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
     const grad = ctx.createLinearGradient(0, 0, 1024, 256);
-    grad.addColorStop(0, '#0f172a');
-    grad.addColorStop(1, '#1e3a8a');
+    grad.addColorStop(0, bgTop);
+    grad.addColorStop(1, bgBot);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1024, 256);
-    ctx.strokeStyle = '#38bdf8';
+    ctx.strokeStyle = border;
     ctx.lineWidth = 10;
     ctx.strokeRect(14, 14, 996, 228);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 74px sans-serif';
+    ctx.font = 'bold 70px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(title, 512, 105);
+    ctx.fillText(title, 512, 102);
 
-    ctx.fillStyle = '#93c5fd';
+    ctx.fillStyle = '#cbd5e1';
     ctx.font = '600 34px sans-serif';
     ctx.fillText(subtitle, 512, 180);
 
@@ -377,23 +409,24 @@ export class Kontrakan3DScene {
     return tex;
   }
 
+  /**
+   * Membangun Denah Lingkungan Asli:
+   * - KIRI (z = 0): Gedung Bertingkat (1 bawah #07 + tangga, 2 atas #08 & #09)
+   * - TENGAH / KANAN BERTINGKAT (z = 0): Deret 4 Memanjang (#01 - #04)
+   * - KANAN DEPAN (z = 0): Rumah Pemilik Kost (Rumah Teh Amoy)
+   * - BELAKANG RUMAH PEMILIK KOST (z = -10.2): 2 Rumah Tetangga / Penghalang
+   * - BELAKANG 2 RUMAH TERSEBUT (z = -21.0, terhubung gang samping): Blok 2 Terpisah (#05 & #06)
+   */
   public buildComplex(units: PublicUnit[]) {
     while (this.worldGroup.children.length > 0) {
       this.worldGroup.remove(this.worldGroup.children[0]);
     }
     this.unitObjects.clear();
     this.clickableMeshes = [];
+    this.hotspotMeshes = [];
     this.porchLights = [];
     this.windowGlowMats = [];
     this.blockRoofs = [];
-
-    const block4Units = units
-      .filter((u) => u.blok === 'memanjang_4')
-      .sort((a, b) => a.urutan - b.urutan || a.nomor_unit - b.nomor_unit);
-
-    const block2Units = units
-      .filter((u) => u.blok === 'memanjang_2')
-      .sort((a, b) => a.urutan - b.urutan || a.nomor_unit - b.nomor_unit);
 
     const tieredGroundUnits = units
       .filter((u) => u.blok === 'bertingkat' && Number(u.lantai) === 1)
@@ -403,178 +436,332 @@ export class Kontrakan3DScene {
       .filter((u) => u.blok === 'bertingkat' && Number(u.lantai) >= 2)
       .sort((a, b) => a.urutan - b.urutan || a.nomor_unit - b.nomor_unit);
 
+    const block4Units = units
+      .filter((u) => u.blok === 'memanjang_4')
+      .sort((a, b) => a.urutan - b.urutan || a.nomor_unit - b.nomor_unit);
+
+    const block2Units = units
+      .filter((u) => u.blok === 'memanjang_2')
+      .sort((a, b) => a.urutan - b.urutan || a.nomor_unit - b.nomor_unit);
+
     const W = this.ROOM_W;
     const H = this.ROOM_H;
     const D = this.ROOM_D;
     const TD = this.TERRACE_D;
     const SLAB = this.FLOOR_SLAB;
-    const gapBetweenBlocks = 3.0;
 
-    const block4Width = block4Units.length > 0 ? block4Units.length * W : 0;
-    const block2Width = block2Units.length > 0 ? block2Units.length * W : 0;
     const hasTiered = tieredGroundUnits.length > 0 || tieredUpperUnits.length > 0;
     const tieredBays = hasTiered ? Math.max(tieredUpperUnits.length, tieredGroundUnits.length + 1, 2) : 0;
     const tieredWidth = tieredBays * W;
 
-    let totalComplexWidth = 0;
-    if (block4Width > 0) totalComplexWidth += block4Width;
-    if (block2Width > 0) totalComplexWidth += (totalComplexWidth > 0 ? gapBetweenBlocks : 0) + block2Width;
-    if (tieredWidth > 0) totalComplexWidth += (totalComplexWidth > 0 ? gapBetweenBlocks : 0) + tieredWidth;
-    totalComplexWidth = Math.max(totalComplexWidth, 16);
+    const block4Width = block4Units.length > 0 ? block4Units.length * W : 0;
+    const block2Width = block2Units.length > 0 ? Math.max(block2Units.length * W, 8.0) : 8.0;
 
-    let cursorX = -totalComplexWidth / 2;
-    const baseZ = 0;
+    const ownerHouseW = Math.max(9.2, block2Width);
+    const gapTieredTo4 = 2.4;
+    const gangToBackW = 3.4; // Gang samping antara Blok 4 dan Rumah Pemilik yang tembus sampai Blok 2 belakang
 
-    // 1. Tanah & Halaman Paving
+    const frontTotalWidth =
+      (tieredWidth > 0 ? tieredWidth + gapTieredTo4 : 0) +
+      (block4Width > 0 ? block4Width + gangToBackW : 0) +
+      ownerHouseW;
+
+    const startX = -frontTotalWidth / 2;
+    let cursorX = startX;
+    const frontZ = 0;
+
+    // =========================================================================
+    // 1. TANAH, HALAMAN PAVING DEPAN, & GANG MENUJU BLOK 2 BELAKANG
+    // =========================================================================
     const grass = new THREE.Mesh(
-      new THREE.PlaneGeometry(totalComplexWidth + 64, 86),
+      new THREE.PlaneGeometry(frontTotalWidth + 80, 110),
       new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.95 })
     );
     grass.rotation.x = -Math.PI / 2;
-    grass.position.set(0, -0.04, 4);
+    grass.position.set(0, -0.05, -8);
     grass.receiveShadow = true;
     this.worldGroup.add(grass);
 
-    const yardW = totalComplexWidth + 9;
-    const yardD = 16.5;
+    // Halaman paving utama di depan seluruh bangunan
+    const yardW = frontTotalWidth + 8;
+    const yardD = 14.5;
     const yard = new THREE.Mesh(
       new THREE.BoxGeometry(yardW, 0.08, yardD),
       new THREE.MeshStandardMaterial({ map: this.paveTexture, roughness: 0.85 })
     );
-    yard.position.set(0, 0, D / 2 + TD + yardD / 2 - 1.5);
+    yard.position.set(0, 0, frontZ + D / 2 + TD + yardD / 2 - 1.2);
     yard.receiveShadow = true;
     this.worldGroup.add(yard);
 
-    const leftMostX = cursorX;
-
-    // 2. BLOK A — 4 Memanjang (#01 - #04)
-    if (block4Units.length > 0) {
-      const b4CenterX = cursorX + block4Width / 2;
-      const b4Roof = this._createPitchedRoof(b4CenterX, H + 0.14, baseZ + TD * 0.35, block4Width + 0.85, D + TD + 1.1, 1.5);
-      b4Roof.add(this._createFascia(block4Width + 0.55));
-      this.blockRoofs.push(b4Roof);
-
-      block4Units.forEach((unit, idx) => {
-        const ux = cursorX + idx * W + W / 2;
-        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, baseZ), b4Roof);
-      });
-
-      cursorX += block4Width;
-      if (block2Units.length > 0 || hasTiered) {
-        this._createWalkwayGarden(cursorX + gapBetweenBlocks / 2, 0.06, baseZ + 0.8);
-        cursorX += gapBetweenBlocks;
-      }
-    }
-
-    // 3. BLOK B — 2 Memanjang TERPISAH (#05 - #06)
-    if (block2Units.length > 0) {
-      const b2CenterX = cursorX + block2Width / 2;
-      const b2Roof = this._createPitchedRoof(b2CenterX, H + 0.14, baseZ + TD * 0.35, block2Width + 0.85, D + TD + 1.1, 1.45);
-      b2Roof.add(this._createFascia(block2Width + 0.55));
-      this.blockRoofs.push(b2Roof);
-
-      block2Units.forEach((unit, idx) => {
-        const ux = cursorX + idx * W + W / 2;
-        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, baseZ), b2Roof);
-      });
-
-      cursorX += block2Width;
-      if (hasTiered) {
-        this._createWalkwayGarden(cursorX + gapBetweenBlocks / 2, 0.06, baseZ + 0.8);
-        cursorX += gapBetweenBlocks;
-      }
-    }
-
-    // 4. BLOK C — Gedung Bertingkat (1 Bawah #07 + 2 Atas #08, #09)
+    // =========================================================================
+    // 2. PALING KIRI — BLOK BERTINGKAT (1 Bawah #07 + Tangga, 2 Atas #08 & #09)
+    // =========================================================================
     if (hasTiered) {
       const tieredStartX = cursorX;
       const tieredCenterX = tieredStartX + tieredWidth / 2;
       const floor2Y = 0.08 + H + SLAB;
 
-      const upperRoof = this._createPitchedRoof(tieredCenterX, floor2Y + H + 0.06, baseZ + TD * 0.35, tieredWidth + 0.85, D + TD + 1.1, 1.65);
+      const upperRoof = this._createPitchedRoof(tieredCenterX, floor2Y + H + 0.06, frontZ + TD * 0.35, tieredWidth + 0.85, D + TD + 1.1, 1.65);
       upperRoof.add(this._createFascia(tieredWidth + 0.55));
       this.blockRoofs.push(upperRoof);
 
-      this._createStaircaseAndCarport(tieredStartX + W / 2, 0.08, baseZ, floor2Y);
+      this._createStaircaseAndCarport(tieredStartX + W / 2, 0.08, frontZ, floor2Y);
 
       tieredGroundUnits.forEach((unit, idx) => {
         const bayIdx = idx + 1;
         const ux = tieredStartX + bayIdx * W + W / 2;
-        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, baseZ), null);
+        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, frontZ), null);
       });
 
       for (let bay = tieredGroundUnits.length + 1; bay < tieredBays; bay++) {
         const px = tieredStartX + bay * W + W / 2;
-        this._createSupportBay(px, 0.08, baseZ, H + SLAB);
+        this._createSupportBay(px, 0.08, frontZ, H + SLAB);
       }
 
       const slabMesh = new THREE.Mesh(
         new THREE.BoxGeometry(tieredWidth + 0.35, SLAB, D + TD + 0.4),
         new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.75 })
       );
-      slabMesh.position.set(tieredCenterX, 0.08 + H + SLAB / 2, baseZ + TD / 2);
+      slabMesh.position.set(tieredCenterX, 0.08 + H + SLAB / 2, frontZ + TD / 2);
       slabMesh.castShadow = true;
       slabMesh.receiveShadow = true;
       this.worldGroup.add(slabMesh);
 
-      this._createBalconyRailing(tieredStartX, floor2Y, baseZ + D / 2 + TD - 0.06, tieredWidth);
+      this._createBalconyRailing(tieredStartX, floor2Y, frontZ + D / 2 + TD - 0.06, tieredWidth);
 
       tieredUpperUnits.forEach((unit, idx) => {
         const ux = tieredStartX + idx * W + W / 2;
-        this._createUnitRoom(unit, new THREE.Vector3(ux, floor2Y, baseZ), upperRoof);
+        this._createUnitRoom(unit, new THREE.Vector3(ux, floor2Y, frontZ), upperRoof);
       });
 
       cursorX += tieredWidth;
+      this._createWalkwayGarden(cursorX + gapTieredTo4 / 2, 0.05, frontZ + 0.8, 7);
+      cursorX += gapTieredTo4;
     }
 
-    const rightMostX = cursorX;
+    // =========================================================================
+    // 3. SEBELAH KANAN BERTINGKAT — BLOK 4 MEMANJANG (#01 - #04)
+    // =========================================================================
+    if (block4Units.length > 0) {
+      const b4CenterX = cursorX + block4Width / 2;
+      const b4Roof = this._createPitchedRoof(b4CenterX, H + 0.14, frontZ + TD * 0.35, block4Width + 0.85, D + TD + 1.1, 1.5);
+      b4Roof.add(this._createFascia(block4Width + 0.55));
+      this.blockRoofs.push(b4Roof);
 
-    // 5. Papan Nama, Pohon & Lampu Taman
-    this._createMainSignboard(0, 0.04, D / 2 + TD + 9.2);
-    this._createTree(leftMostX - 3.6, 0, baseZ + 5.6, 1.15);
-    this._createTree(leftMostX - 4.4, 0, baseZ - 2.6, 1.35);
-    this._createTree(rightMostX + 3.8, 0, baseZ + 5.2, 1.2);
-    this._createTree(rightMostX + 4.2, 0, baseZ - 2.8, 1.4);
+      block4Units.forEach((unit, idx) => {
+        const ux = cursorX + idx * W + W / 2;
+        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, frontZ), b4Roof);
+      });
 
-    this._createGardenLamp(leftMostX + 1.5, 0.04, D / 2 + TD + 7.6);
-    this._createGardenLamp(0, 0.04, D / 2 + TD + 7.6);
-    this._createGardenLamp(rightMostX - 1.5, 0.04, D / 2 + TD + 7.6);
+      cursorX += block4Width;
+    }
 
-    this.lastComplexWidth = totalComplexWidth;
+    // =========================================================================
+    // 4. GANG AKSES MENEMBUS KE BELAKANG (Menuju Blok 2 Terpisah #05 & #06)
+    // =========================================================================
+    const gangCenterX = cursorX + gangToBackW / 2;
+    const gangRoad = new THREE.Mesh(
+      new THREE.BoxGeometry(gangToBackW - 0.3, 0.07, 29.5),
+      new THREE.MeshStandardMaterial({ map: this.paveTexture, color: 0xe2e8f0, roughness: 0.85 })
+    );
+    gangRoad.position.set(gangCenterX, 0.01, -9.2);
+    gangRoad.receiveShadow = true;
+    this.worldGroup.add(gangRoad);
+
+    // Lampu gang sepanjang jalan akses ke Blok 2 belakang
+    this._createGardenLamp(gangCenterX - 1.15, 0.04, 3.5);
+    this._createGardenLamp(gangCenterX - 1.15, 0.04, -6.5);
+    this._createGardenLamp(gangCenterX - 1.15, 0.04, -15.5);
+
+    cursorX += gangToBackW;
+
+    // =========================================================================
+    // 5. KANAN DEPAN: RUMAH PEMILIK KOST (RUMAH TEH AMOY)
+    //    DI BELAKANGNYA: 2 RUMAH PENGHALANG / TETANGGA
+    //    DI BELAKANG 2 RUMAH TERSEBUT: BLOK 2 TERPISAH (#05 & #06)
+    // =========================================================================
+    const ownerZoneStartX = cursorX;
+    const ownerZoneCenterX = ownerZoneStartX + ownerHouseW / 2;
+
+    // 5A. Rumah Pemilik Kost (z = 0)
+    this._createDecorativeHouse(ownerZoneCenterX, 0.08, frontZ + 0.1, ownerHouseW - 0.2, 3.65, 7.2, {
+      wallColor: 0xfef3c7,
+      roofColor: 0x7c2d12,
+      trimColor: 0x1e3a8a,
+      signTitle: 'RUMAH PEMILIK KOST',
+      signSub: 'Teh Amoy',
+    });
+
+    // 5B. 2 Rumah Penghalang / Tetangga di belakang Rumah Pemilik Kost (z = -10.2)
+    // Dua rumah berdampingan terpisah jelas yang menghalangi antara Rumah Pemilik & Blok 2!
+    const blockerZ = -10.4;
+    const blockerHouseW = (ownerHouseW - 1.0) / 2;
+    this._createDecorativeHouse(ownerZoneStartX + blockerHouseW / 2 + 0.1, 0.08, blockerZ, blockerHouseW, 3.25, 6.2, {
+      wallColor: 0xe2e8f0,
+      roofColor: 0x475569,
+      trimColor: 0x64748b,
+      signTitle: 'RUMAH WARGA 1',
+      signSub: 'Penghalang',
+    });
+    this._createDecorativeHouse(ownerZoneStartX + blockerHouseW * 1.5 + 0.9, 0.08, blockerZ, blockerHouseW, 3.35, 6.2, {
+      wallColor: 0xf1f5f9,
+      roofColor: 0x57534e,
+      trimColor: 0x78716c,
+      signTitle: 'RUMAH WARGA 2',
+      signSub: 'Penghalang',
+    });
+
+    // Halaman paving kecil khusus di depan Blok 2 Terpisah (di belakang 2 rumah penghalang)
+    const block2Z = -21.2;
+    const backYard = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.max(block2Width, ownerHouseW) + gangToBackW, 0.07, 4.4),
+      new THREE.MeshStandardMaterial({ map: this.paveTexture, roughness: 0.85 })
+    );
+    backYard.position.set(ownerZoneCenterX - gangToBackW / 2, 0.01, block2Z + D / 2 + TD + 1.3);
+    backYard.receiveShadow = true;
+    this.worldGroup.add(backYard);
+
+    // 5C. BLOK 2 TERPISAH (#05 & #06) tepat di belakang 2 rumah penghalang!
+    if (block2Units.length > 0) {
+      const actualB2W = block2Units.length * W;
+      const b2StartX = ownerZoneStartX + (ownerHouseW - actualB2W) / 2;
+      const b2CenterX = b2StartX + actualB2W / 2;
+
+      const b2Roof = this._createPitchedRoof(b2CenterX, H + 0.14, block2Z + TD * 0.35, actualB2W + 0.85, D + TD + 1.1, 1.45);
+      b2Roof.add(this._createFascia(actualB2W + 0.55));
+      this.blockRoofs.push(b2Roof);
+
+      block2Units.forEach((unit, idx) => {
+        const ux = b2StartX + idx * W + W / 2;
+        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, block2Z), b2Roof);
+      });
+    }
+
+    const rightMostX = ownerZoneStartX + ownerHouseW;
+
+    // =========================================================================
+    // 6. PAPAN NAMA UTAMA, POHON & LAMPU DEPAN
+    // =========================================================================
+    this._createMainSignboard(-4.0, 0.04, frontZ + D / 2 + TD + 9.2);
+
+    this._createTree(startX - 3.6, 0, frontZ + 5.6, 1.2);
+    this._createTree(startX - 4.4, 0, frontZ - 3.5, 1.35);
+    this._createTree(rightMostX + 3.8, 0, frontZ + 4.8, 1.2);
+    this._createTree(rightMostX + 4.0, 0, blockerZ, 1.3);
+    this._createTree(rightMostX + 3.8, 0, block2Z, 1.25);
+
+    this._createGardenLamp(startX + 1.8, 0.04, frontZ + D / 2 + TD + 7.6);
+    this._createGardenLamp(-2.5, 0.04, frontZ + D / 2 + TD + 7.6);
+    this._createGardenLamp(rightMostX - 1.5, 0.04, frontZ + D / 2 + TD + 7.6);
+
+    this.lastComplexWidth = frontTotalWidth;
+    this.lastComplexCenterX = 0;
+    this.lastComplexCenterZ = -5.5;
     this._updateResponsiveCameraFraming(!this.activeUnitId);
     this.setNightMode(this.isNightMode);
+  }
+
+  /**
+   * Membangun rumah non-sewa (Rumah Pemilik Kost & 2 Rumah Warga Penghalang di belakangnya)
+   */
+  private _createDecorativeHouse(
+    cx: number,
+    y: number,
+    cz: number,
+    w: number,
+    h: number,
+    d: number,
+    opts: { wallColor: number; roofColor: number; trimColor: number; signTitle: string; signSub: string }
+  ) {
+    const grp = new THREE.Group();
+    grp.position.set(cx, y, cz);
+    this.worldGroup.add(grp);
+
+    const wallMat = new THREE.MeshStandardMaterial({ color: opts.wallColor, roughness: 0.85 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: opts.trimColor, roughness: 0.6 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.6 });
+    const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.45, roughness: 0.15 });
+
+    // Badan rumah
+    this._addBox(grp, w, h, d, 0, h / 2, 0, wallMat, true);
+    // Teras kecil depan
+    this._addBox(grp, w, 0.16, 1.4, 0, 0.08, d / 2 + 0.7, new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.8 }), true);
+    // Pilar teras
+    this._addBox(grp, 0.22, h, 0.22, -w / 2 + 0.2, h / 2, d / 2 + 1.25, trimMat, true);
+    this._addBox(grp, 0.22, h, 0.22, w / 2 - 0.2, h / 2, d / 2 + 1.25, trimMat, true);
+
+    // Pintu & jendela depan
+    this._addBox(grp, 1.15, 2.15, 0.08, 0, 1.12, d / 2 + 0.03, woodMat);
+    if (w >= 6.5) {
+      this._addBox(grp, 1.3, 1.15, 0.08, -w * 0.28, 1.65, d / 2 + 0.03, woodMat);
+      this._addBox(grp, 1.2, 1.05, 0.09, -w * 0.28, 1.65, d / 2 + 0.04, glassMat);
+      this._addBox(grp, 1.3, 1.15, 0.08, w * 0.28, 1.65, d / 2 + 0.03, woodMat);
+      this._addBox(grp, 1.2, 1.05, 0.09, w * 0.28, 1.65, d / 2 + 0.04, glassMat);
+    } else {
+      this._addBox(grp, 0.95, 1.05, 0.08, w * 0.26, 1.65, d / 2 + 0.03, woodMat);
+      this._addBox(grp, 0.85, 0.95, 0.09, w * 0.26, 1.65, d / 2 + 0.04, glassMat);
+    }
+
+    // Atap pelana tersendiri
+    const roofDepth = d + 2.0;
+    const ridgeH = Math.min(1.85, w * 0.24);
+    const shape = new THREE.Shape();
+    shape.moveTo(-roofDepth / 2, 0);
+    shape.lineTo(0, ridgeH);
+    shape.lineTo(roofDepth / 2, 0);
+    shape.closePath();
+    const extrude = new THREE.ExtrudeGeometry(shape, { depth: w + 0.7, bevelEnabled: false });
+    extrude.center();
+    const roof = new THREE.Mesh(extrude, new THREE.MeshStandardMaterial({ color: opts.roofColor, roughness: 0.78 }));
+    roof.rotation.y = Math.PI / 2;
+    roof.position.set(0, h + ridgeH / 2, 0.55);
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    grp.add(roof);
+
+    // Papan label kecil di fasad depan rumah supaya jelas di 3D overview
+    const signTex = this._makeSignboardTexture(opts.signTitle, opts.signSub, '#1e293b', '#334155', '#94a3b8');
+    const signW = Math.min(3.0, w * 0.68);
+    const signBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(signW, 0.72, 0.06),
+      [
+        trimMat, trimMat, trimMat, trimMat,
+        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.45 }),
+        trimMat,
+      ]
+    );
+    signBoard.position.set(0, h - 0.48, d / 2 + 1.38);
+    grp.add(signBoard);
   }
 
   private _updateResponsiveCameraFraming(applyImmediately = false) {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     const aspect = w / Math.max(h, 1);
-    const complexW = this.lastComplexWidth || 38;
+    const complexW = this.lastComplexWidth || 42;
 
+    // Sudut sedikit lebih tinggi agar Blok 2 yang berada di belakang 2 rumah juga terlihat jelas dari overview!
     let fov = 46;
-    let camY = 11.2;
-    let camZ = Math.max(27.5, complexW * 0.72);
-    let targetY = 2.2;
+    let camY = 20.5;
+    let camZ = Math.max(30, complexW * 0.74);
 
     if (aspect < 0.72) {
       fov = 56;
-      camY = 15.5;
-      camZ = Math.max(44, complexW * 1.18);
-      targetY = 1.6;
+      camY = 27.5;
+      camZ = Math.max(46, complexW * 1.15);
     } else if (aspect < 1.15) {
       fov = 52;
-      camY = 13.0;
-      camZ = Math.max(34, complexW * 0.9);
-      targetY = 2.0;
+      camY = 23.5;
+      camZ = Math.max(37, complexW * 0.92);
     }
 
     this.camera.fov = fov;
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
 
-    this.overviewTarget.set(0, targetY, 0.5);
-    this.overviewCamPos.set(0, camY, camZ);
-    this.controls.maxDistance = Math.max(65, camZ + 22);
+    this.overviewTarget.set(this.lastComplexCenterX, 1.2, this.lastComplexCenterZ);
+    this.overviewCamPos.set(this.lastComplexCenterX - 3.5, camY, camZ);
+    this.controls.maxDistance = Math.max(80, camZ + 28);
 
     if (applyImmediately && !this.activeUnitId && !this.transition) {
       this.camera.position.copy(this.overviewCamPos);
@@ -717,14 +904,14 @@ export class Kontrakan3DScene {
     lamp2.position.set(-0.2, H - 0.16, -0.2);
     unitGroup.add(lamp2);
 
-    const interiorLight = new THREE.PointLight(0xfff7ed, 0.6, 10.5);
-    interiorLight.position.set(0, H - 0.45, 0.5);
+    const interiorLight = new THREE.PointLight(0xfff7ed, 0.65, 12);
+    interiorLight.position.set(0, H - 0.45, 0.35);
     unitGroup.add(interiorLight);
 
     // Struktur Ruangan Persis Video
     this._buildRealVideoStructure(unitGroup, W, H, wallIntMat, skirtingMat, darkWoodMat);
 
-    // Kosongan polos untuk unit KOSONG / MAINTENANCE; minimalis hanya untuk unit TERISI
+    // Unit KOSONG 100% kosongan polos; unit TERISI ada perabotan minimalis
     if (unit.status === 'terisi') {
       this._buildMinimalOccupiedItems(unitGroup, accentColor);
     }
@@ -743,10 +930,58 @@ export class Kontrakan3DScene {
     highlightStrip.position.set(0, 0.13, D / 2 + TD - 0.08);
     unitGroup.add(highlightStrip);
 
+    // =========================================================================
+    // 4 TITIK RUANGAN INTERAKTIF (Multi-Room Virtual Tour + 360° Look-Around)
+    // Target diletakkan 0.4m dari posisi mata agar bisa putar 360° di tempat tanpa tembus tembok!
+    // =========================================================================
     const worldOrigin = origin.clone();
+    const mkPoint = (lx: number, ly: number, lz: number) => new THREE.Vector3(worldOrigin.x + lx, worldOrigin.y + ly, worldOrigin.z + lz);
+    const mkLookTarget = (pos: THREE.Vector3, lookAt: THREE.Vector3) => {
+      const dir = lookAt.clone().sub(pos).normalize();
+      return pos.clone().addScaledVector(dir, 0.42);
+    };
+
+    const pDepan = mkPoint(0.2, 1.56, 2.48);
+    const pTengah = mkPoint(-0.25, 1.56, 0.12);
+    const pDapur = mkPoint(0.86, 1.54, -1.92);
+    const pKamarMandi = mkPoint(-0.42, 1.50, -2.18);
+
+    const rooms: Record<InteriorRoomKey, RoomCameraPreset> = {
+      depan: {
+        pos: pDepan,
+        target: mkLookTarget(pDepan, mkPoint(-0.65, 1.4, 0.9)),
+        hotspotPos: new THREE.Vector3(0.2, 0.135, 2.45),
+      },
+      tengah: {
+        pos: pTengah,
+        target: mkLookTarget(pTengah, mkPoint(0.6, 1.35, -1.8)),
+        hotspotPos: new THREE.Vector3(-0.25, 0.135, 0.12),
+      },
+      dapur: {
+        pos: pDapur,
+        target: mkLookTarget(pDapur, mkPoint(1.5, 1.2, -2.35)),
+        hotspotPos: new THREE.Vector3(0.86, 0.135, -1.92),
+      },
+      kamar_mandi: {
+        pos: pKamarMandi,
+        target: mkLookTarget(pKamarMandi, mkPoint(-1.35, 1.08, -2.95)),
+        hotspotPos: new THREE.Vector3(-0.55, 0.145, -2.22),
+      },
+    };
+
+    // Buat lingkaran Floor Hotspot di lantai setiap ruangan (hanya tampil saat masuk ke unit ini)
+    const hotspots = new Map<InteriorRoomKey, THREE.Group>();
+    (Object.keys(rooms) as InteriorRoomKey[]).forEach((roomKey) => {
+      const hsGroup = this._createFloorHotspot(unit.id, roomKey, rooms[roomKey].hotspotPos);
+      hsGroup.visible = false;
+      unitGroup.add(hsGroup);
+      hotspots.set(roomKey, hsGroup);
+    });
+
     this.unitObjects.set(unit.id, {
       unit,
       group: unitGroup,
+      origin: worldOrigin,
       blockRoof,
       doorPivot,
       doorTargetAngle: 0,
@@ -754,13 +989,46 @@ export class Kontrakan3DScene {
       interiorLight,
       highlightMat,
       labelAnchor: new THREE.Vector3(worldOrigin.x, worldOrigin.y + H + 0.55, worldOrigin.z + D / 2 + 0.65),
-      doorApproachPos: new THREE.Vector3(worldOrigin.x - 0.9, worldOrigin.y + 1.62, worldOrigin.z + D / 2 + TD + 2.6),
+      doorApproachPos: new THREE.Vector3(worldOrigin.x - 0.9, worldOrigin.y + 1.62, worldOrigin.z + D / 2 + TD + 2.5),
       doorApproachTarget: new THREE.Vector3(worldOrigin.x - 0.5, worldOrigin.y + 1.4, worldOrigin.z + 0.5),
-      interiorCamPos: new THREE.Vector3(worldOrigin.x - 0.65, worldOrigin.y + 1.62, worldOrigin.z + D / 2 - 0.75),
-      interiorTarget: new THREE.Vector3(worldOrigin.x + 0.15, worldOrigin.y + 1.25, worldOrigin.z - 1.45),
-      cutawayCamPos: new THREE.Vector3(worldOrigin.x + 0.2, worldOrigin.y + 8.6, worldOrigin.z + 5.6),
+      cutawayCamPos: new THREE.Vector3(worldOrigin.x + 0.2, worldOrigin.y + 8.8, worldOrigin.z + 5.6),
       cutawayTarget: new THREE.Vector3(worldOrigin.x, worldOrigin.y + 0.6, worldOrigin.z - 0.2),
+      rooms,
+      hotspots,
     });
+  }
+
+  private _createFloorHotspot(unitId: number, roomKey: InteriorRoomKey, localPos: THREE.Vector3): THREE.Group {
+    const grp = new THREE.Group();
+    grp.position.copy(localPos);
+
+    const outerRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.2, 0.29, 28),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.92 })
+    );
+    outerRing.rotation.x = -Math.PI / 2;
+    grp.add(outerRing);
+
+    const innerDisk = new THREE.Mesh(
+      new THREE.CircleGeometry(0.18, 24),
+      new THREE.MeshBasicMaterial({ color: 0x0ea5e9, side: THREE.DoubleSide, transparent: true, opacity: 0.42 })
+    );
+    innerDisk.rotation.x = -Math.PI / 2;
+    innerDisk.position.y = 0.005;
+    innerDisk.userData = { hotspotUnitId: unitId, hotspotRoom: roomKey };
+    grp.add(innerDisk);
+    this.hotspotMeshes.push(innerDisk);
+
+    return grp;
+  }
+
+  private _updateHotspotsVisibility() {
+    for (const [id, obj] of this.unitObjects.entries()) {
+      const isCurrentUnit = id === this.activeUnitId && !this.isCutawayMode;
+      for (const [roomKey, hsGrp] of obj.hotspots.entries()) {
+        hsGrp.visible = isCurrentUnit && roomKey !== this.activeRoom;
+      }
+    }
   }
 
   private _buildRealVideoStructure(
@@ -1002,16 +1270,16 @@ export class Kontrakan3DScene {
     this.worldGroup.add(rightSideBar);
   }
 
-  private _createWalkwayGarden(cx: number, y: number, cz: number) {
+  private _createWalkwayGarden(cx: number, y: number, cz: number, count = 7) {
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9 });
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < count; i++) {
       const stone = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.45), stoneMat);
       stone.position.set(cx, y, cz + 4.2 - i * 1.35);
       stone.receiveShadow = true;
       this.worldGroup.add(stone);
     }
-    this._createPottedPlant(cx - 0.85, y, cz + 4.3);
-    this._createPottedPlant(cx + 0.85, y, cz + 4.3);
+    this._createPottedPlant(cx - 0.72, y, cz + 4.3);
+    this._createPottedPlant(cx + 0.72, y, cz + 4.3);
   }
 
   private _createPottedPlant(x: number, y: number, z: number) {
@@ -1056,7 +1324,7 @@ export class Kontrakan3DScene {
     this._addBox(grp, 0.12, 2.25, 0.12, -1.75, 1.12, 0, postMat, true);
     this._addBox(grp, 0.12, 2.25, 0.12, 1.75, 1.12, 0, postMat, true);
 
-    const tex = this._makeSignboardTexture('KONTRAKAN TEH AMOY', 'Hunian Nyaman & Asri • Klik Pintu Untuk Masuk 3D');
+    const tex = this._makeSignboardTexture('KONTRAKAN TEH AMOY', 'Klik Unit Untuk Masuk & Keliling Per Ruangan 3D');
     const board = new THREE.Mesh(new THREE.BoxGeometry(3.9, 1.0, 0.14), [
       postMat, postMat, postMat, postMat,
       new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35 }),
@@ -1119,25 +1387,83 @@ export class Kontrakan3DScene {
     this._restoreAllRoofsAndCeilings();
     for (const [id, item] of this.unitObjects.entries()) {
       item.doorTargetAngle = id === unitId ? -1.48 : 0;
-      item.interiorLight.intensity = id === unitId ? 1.55 : this.isNightMode ? 0.9 : 0.45;
+      item.interiorLight.intensity = id === unitId ? 1.6 : this.isNightMode ? 0.9 : 0.45;
     }
 
     this.activeUnitId = unitId;
+    this.activeRoom = 'depan';
     this.isCutawayMode = false;
+    this._updateHotspotsVisibility();
 
+    const firstRoom = obj.rooms.depan;
     this.transition = {
       type: 'enter',
       unitId,
+      roomKey: 'depan',
       elapsed: 0,
       duration: 1.45,
-      waypointsPos: [this.camera.position.clone(), obj.doorApproachPos.clone(), obj.interiorCamPos.clone()],
-      waypointsTarget: [this.controls.target.clone(), obj.doorApproachTarget.clone(), obj.interiorTarget.clone()],
+      waypointsPos: [this.camera.position.clone(), obj.doorApproachPos.clone(), firstRoom.pos.clone()],
+      waypointsTarget: [this.controls.target.clone(), obj.doorApproachTarget.clone(), firstRoom.target.clone()],
     };
 
-    this.controls.minDistance = 0.25;
-    this.controls.maxDistance = 65;
-    this.controls.maxPolarAngle = Math.PI * 0.72;
+    this.controls.minDistance = 0.15;
+    this.controls.maxDistance = 85;
+    this.controls.maxPolarAngle = Math.PI * 0.78;
     this.callbacks.onEnterUnit?.(obj.unit);
+    this.callbacks.onRoomChange?.('depan');
+  }
+
+  /**
+   * Berpindah mulus ke ruangan tertentu di dalam kontrakan (melewati bukaan pintu sekat!)
+   */
+  public goToRoom(roomKey: InteriorRoomKey) {
+    if (!this.activeUnitId) return;
+    const obj = this.unitObjects.get(this.activeUnitId);
+    if (!obj) return;
+
+    // Jika sedang Mode Denah 3D, kembalikan ke Mode 360° Dalam ruangan
+    if (this.isCutawayMode) {
+      this.isCutawayMode = false;
+      this._restoreAllRoofsAndCeilings();
+    }
+
+    const prevRoom = this.activeRoom;
+    this.activeRoom = roomKey;
+    this._updateHotspotsVisibility();
+
+    const dest = obj.rooms[roomKey];
+    const startPos = this.camera.position.clone();
+    const startTarget = this.controls.target.clone();
+
+    // Hitung titik tengah pintu sekat agar transisi meluncur lewat bukaan pintu (tidak menembus dinding!)
+    const o = obj.origin;
+    const partitionDoorway = new THREE.Vector3(o.x - 0.82, o.y + 1.56, o.z + 1.35);
+    const bathDoorway = new THREE.Vector3(o.x + 0.35, o.y + 1.52, o.z - 2.08);
+
+    let waypointsPos: THREE.Vector3[] = [startPos, dest.pos.clone()];
+    let waypointsTarget: THREE.Vector3[] = [startTarget, dest.target.clone()];
+
+    if ((prevRoom === 'depan' && roomKey !== 'depan') || (prevRoom !== 'depan' && roomKey === 'depan')) {
+      waypointsPos = [startPos, partitionDoorway, dest.pos.clone()];
+      waypointsTarget = [startTarget, dest.pos.clone(), dest.target.clone()];
+    } else if (roomKey === 'kamar_mandi' || prevRoom === 'kamar_mandi') {
+      waypointsPos = [startPos, bathDoorway, dest.pos.clone()];
+      waypointsTarget = [startTarget, dest.pos.clone(), dest.target.clone()];
+    }
+
+    this.transition = {
+      type: 'room',
+      unitId: this.activeUnitId,
+      roomKey,
+      elapsed: 0,
+      duration: 0.9,
+      waypointsPos,
+      waypointsTarget,
+    };
+
+    this.controls.minDistance = 0.2;
+    this.controls.maxDistance = 2.0;
+    this.callbacks.onRoomChange?.(roomKey);
   }
 
   public exitUnit() {
@@ -1156,6 +1482,7 @@ export class Kontrakan3DScene {
     const midPos = prevObj ? prevObj.doorApproachPos.clone() : this.camera.position.clone();
     this.activeUnitId = null;
     this.isCutawayMode = false;
+    this._updateHotspotsVisibility();
 
     this.transition = {
       type: 'exit',
@@ -1175,14 +1502,16 @@ export class Kontrakan3DScene {
     this.isCutawayMode = !this.isCutawayMode;
     obj.ceiling.visible = !this.isCutawayMode;
     if (obj.blockRoof) obj.blockRoof.visible = !this.isCutawayMode;
+    this._updateHotspotsVisibility();
 
+    const activePreset = obj.rooms[this.activeRoom];
     this.transition = {
       type: 'cutaway',
       unitId: this.activeUnitId,
       elapsed: 0,
       duration: 0.85,
-      waypointsPos: [this.camera.position.clone(), this.isCutawayMode ? obj.cutawayCamPos.clone() : obj.interiorCamPos.clone()],
-      waypointsTarget: [this.controls.target.clone(), this.isCutawayMode ? obj.cutawayTarget.clone() : obj.interiorTarget.clone()],
+      waypointsPos: [this.camera.position.clone(), this.isCutawayMode ? obj.cutawayCamPos.clone() : activePreset.pos.clone()],
+      waypointsTarget: [this.controls.target.clone(), this.isCutawayMode ? obj.cutawayTarget.clone() : activePreset.target.clone()],
     };
     return this.isCutawayMode;
   }
@@ -1201,7 +1530,7 @@ export class Kontrakan3DScene {
     this.isNightMode = isNight;
     if (isNight) {
       this.scene.background = new THREE.Color(0x0f172a);
-      this.scene.fog = new THREE.FogExp2(0x0f172a, 0.013);
+      this.scene.fog = new THREE.FogExp2(0x0f172a, 0.011);
       this.hemiLight.color.setHex(0x334155);
       this.hemiLight.groundColor.setHex(0x0f172a);
       this.hemiLight.intensity = 0.55;
@@ -1209,8 +1538,8 @@ export class Kontrakan3DScene {
       this.sunLight.intensity = 0.42;
       this.fillLight.intensity = 0.22;
       this.porchLights.forEach(({ light, bulbMat }) => {
-        light.intensity = 1.6;
-        bulbMat.emissiveIntensity = 1.6;
+        light.intensity = 1.65;
+        bulbMat.emissiveIntensity = 1.65;
       });
       this.windowGlowMats.forEach((m) => { m.emissiveIntensity = 0.42; });
       for (const [id, obj] of this.unitObjects.entries()) {
@@ -1218,7 +1547,7 @@ export class Kontrakan3DScene {
       }
     } else {
       this.scene.background = new THREE.Color(0x93c5fd);
-      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.0095);
+      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.0075);
       this.hemiLight.color.setHex(0xe0f2fe);
       this.hemiLight.groundColor.setHex(0x64748b);
       this.hemiLight.intensity = 0.88;
@@ -1231,7 +1560,7 @@ export class Kontrakan3DScene {
       });
       this.windowGlowMats.forEach((m) => { m.emissiveIntensity = 0.0; });
       for (const [id, obj] of this.unitObjects.entries()) {
-        obj.interiorLight.intensity = id === this.activeUnitId ? 1.45 : 0.45;
+        obj.interiorLight.intensity = id === this.activeUnitId ? 1.55 : 0.45;
       }
     }
   }
@@ -1261,6 +1590,17 @@ export class Kontrakan3DScene {
     dom.addEventListener('pointermove', this.handlePointerMoveBound);
     dom.addEventListener('pointerup', this.handlePointerUpBound);
     window.addEventListener('resize', this.handleResizeBound);
+    window.addEventListener('keydown', this.handleKeyDownBound);
+    window.addEventListener('keyup', this.handleKeyUpBound);
+  }
+
+  private _onKeyDown(e: KeyboardEvent) {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
+    this.keysPressed.add(e.key.toLowerCase());
+  }
+
+  private _onKeyUp(e: KeyboardEvent) {
+    this.keysPressed.delete(e.key.toLowerCase());
   }
 
   private _onPointerDown(e: PointerEvent) {
@@ -1269,14 +1609,33 @@ export class Kontrakan3DScene {
 
   private _onPointerMove(e: PointerEvent) {
     const dom = this.renderer.domElement;
+    this._updatePointer(e);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    // Saat berada di dalam unit: deteksi hover pada Floor Hotspot 3D
+    if (this.activeUnitId && !this.isCutawayMode) {
+      const visibleHotspots = this.hotspotMeshes.filter((m) => m.parent?.visible);
+      const hsHits = this.raycaster.intersectObjects(visibleHotspots, false);
+      const hitMesh = hsHits.length > 0 ? (hsHits[0].object as THREE.Mesh) : null;
+      if (hitMesh !== this.hoveredHotspot) {
+        if (this.hoveredHotspot) this.hoveredHotspot.parent?.scale.setScalar(1);
+        this.hoveredHotspot = hitMesh;
+        if (hitMesh) {
+          hitMesh.parent?.scale.setScalar(1.22);
+          dom.style.cursor = 'pointer';
+        } else {
+          dom.style.cursor = 'grab';
+        }
+      }
+      return;
+    }
+
     if (this.activeUnitId) {
       dom.style.cursor = 'grab';
       return;
     }
-    this._updatePointer(e);
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects(this.clickableMeshes, false);
 
+    const hits = this.raycaster.intersectObjects(this.clickableMeshes, false);
     const hitId: number | null = hits.length > 0 ? (hits[0].object.userData.unitId as number) : null;
     if (hitId !== this.hoveredUnitId) {
       if (this.hoveredUnitId && this.unitObjects.has(this.hoveredUnitId)) {
@@ -1294,10 +1653,24 @@ export class Kontrakan3DScene {
 
   private _onPointerUp(e: PointerEvent) {
     const dist = Math.hypot(e.clientX - this.pointerDownPos.x, e.clientY - this.pointerDownPos.y);
-    if (dist > 6 || this.activeUnitId) return;
+    if (dist > 6) return;
 
     this._updatePointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    // Klik Floor Hotspot di dalam ruangan -> pindah ruangan halus!
+    if (this.activeUnitId && !this.isCutawayMode) {
+      const visibleHotspots = this.hotspotMeshes.filter((m) => m.parent?.visible);
+      const hsHits = this.raycaster.intersectObjects(visibleHotspots, false);
+      if (hsHits.length > 0) {
+        const roomKey = hsHits[0].object.userData.hotspotRoom as InteriorRoomKey;
+        this.goToRoom(roomKey);
+      }
+      return;
+    }
+
+    if (this.activeUnitId) return;
+
     const hits = this.raycaster.intersectObjects(this.clickableMeshes, false);
     if (hits.length > 0) {
       this.enterUnit(hits[0].object.userData.unitId as number);
@@ -1335,11 +1708,54 @@ export class Kontrakan3DScene {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
+  private _handleFreeWalk(delta: number) {
+    if (!this.activeUnitId || this.isCutawayMode || this.transition) return;
+    if (this.keysPressed.size === 0) return;
+
+    const obj = this.unitObjects.get(this.activeUnitId);
+    if (!obj) return;
+
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() < 0.0001) return;
+    forward.normalize();
+
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const move = new THREE.Vector3();
+
+    if (this.keysPressed.has('w') || this.keysPressed.has('arrowup')) move.add(forward);
+    if (this.keysPressed.has('s') || this.keysPressed.has('arrowdown')) move.sub(forward);
+    if (this.keysPressed.has('d') || this.keysPressed.has('arrowright')) move.add(right);
+    if (this.keysPressed.has('a') || this.keysPressed.has('arrowleft')) move.sub(right);
+
+    if (move.lengthSq() === 0) return;
+    move.normalize().multiplyScalar(delta * 2.5);
+
+    const o = obj.origin;
+    const minX = o.x - this.ROOM_W / 2 + 0.35;
+    const maxX = o.x + this.ROOM_W / 2 - 0.35;
+    const minZ = o.z - this.ROOM_D / 2 + 0.35;
+    const maxZ = o.z + this.ROOM_D / 2 - 0.35;
+
+    const nextCamX = THREE.MathUtils.clamp(this.camera.position.x + move.x, minX, maxX);
+    const nextCamZ = THREE.MathUtils.clamp(this.camera.position.z + move.z, minZ, maxZ);
+    const dx = nextCamX - this.camera.position.x;
+    const dz = nextCamZ - this.camera.position.z;
+
+    this.camera.position.x += dx;
+    this.camera.position.z += dz;
+    this.controls.target.x += dx;
+    this.controls.target.z += dz;
+  }
+
   private _animate() {
     if (this.disposed) return;
     this.animFrameId = requestAnimationFrame(() => this._animate());
     const delta = Math.min(this.clock.getDelta(), 0.05);
+    this.elapsedTotal += delta;
 
+    // 1. Animasi pintu berengsel
     for (const obj of this.unitObjects.values()) {
       const diff = obj.doorTargetAngle - obj.doorPivot.rotation.y;
       if (Math.abs(diff) > 0.004) {
@@ -1347,6 +1763,23 @@ export class Kontrakan3DScene {
       }
     }
 
+    // 2. Animasi denyut lembut Floor Hotspot di dalam ruangan
+    if (this.activeUnitId && !this.isCutawayMode) {
+      const pulse = 1 + Math.sin(this.elapsedTotal * 3.5) * 0.08;
+      const obj = this.unitObjects.get(this.activeUnitId);
+      if (obj) {
+        for (const hsGrp of obj.hotspots.values()) {
+          if (hsGrp.visible && this.hoveredHotspot?.parent !== hsGrp) {
+            hsGrp.scale.setScalar(pulse);
+          }
+        }
+      }
+    }
+
+    // 3. Gerak bebas keyboard WASD / Panah di dalam ruangan
+    this._handleFreeWalk(delta);
+
+    // 4. Transisi kamera mulus
     if (this.transition) {
       this.transition.elapsed += delta;
       const rawT = Math.min(1, this.transition.elapsed / this.transition.duration);
@@ -1358,23 +1791,24 @@ export class Kontrakan3DScene {
       if (rawT >= 1) {
         const finishedType = this.transition.type;
         this.transition = null;
-        if (finishedType === 'enter') {
-          this.controls.minDistance = 0.35;
-          this.controls.maxDistance = 4.2;
-          this.controls.maxPolarAngle = Math.PI * 0.68;
+        if (finishedType === 'enter' || finishedType === 'room') {
+          // Mode 360° Look-around di tempat (jarak target pendek agar bebas putar 360° tanpa tembus dinding!)
+          this.controls.minDistance = 0.25;
+          this.controls.maxDistance = 0.75;
+          this.controls.maxPolarAngle = Math.PI * 0.78;
         } else if (finishedType === 'cutaway') {
           if (this.isCutawayMode) {
             this.controls.minDistance = 4.0;
             this.controls.maxDistance = 14;
             this.controls.maxPolarAngle = Math.PI / 2 - 0.1;
           } else {
-            this.controls.minDistance = 0.35;
-            this.controls.maxDistance = 4.2;
-            this.controls.maxPolarAngle = Math.PI * 0.68;
+            this.controls.minDistance = 0.25;
+            this.controls.maxDistance = 0.75;
+            this.controls.maxPolarAngle = Math.PI * 0.78;
           }
         } else {
           this.controls.minDistance = 6;
-          this.controls.maxDistance = Math.max(65, this.overviewCamPos.z + 22);
+          this.controls.maxDistance = Math.max(80, this.overviewCamPos.z + 28);
           this.controls.maxPolarAngle = Math.PI / 2 - 0.04;
         }
       }
@@ -1393,6 +1827,8 @@ export class Kontrakan3DScene {
     dom.removeEventListener('pointermove', this.handlePointerMoveBound);
     dom.removeEventListener('pointerup', this.handlePointerUpBound);
     window.removeEventListener('resize', this.handleResizeBound);
+    window.removeEventListener('keydown', this.handleKeyDownBound);
+    window.removeEventListener('keyup', this.handleKeyUpBound);
     this.controls.dispose();
     this.renderer.dispose();
     if (dom.parentNode === this.container) {

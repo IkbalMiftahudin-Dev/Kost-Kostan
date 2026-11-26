@@ -1332,10 +1332,10 @@ export default function AdminDashboard({ admin }: { admin: AdminUser }) {
                     onChange={(e) => setUnitForm((f) => ({ ...f, layout_pos: e.target.value }))}
                     className="w-full bg-slate-950 border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-sky-400"
                   >
-                    <option value="memanjang_4:1">Blok A: Deret 4 Memanjang (Lt. 1)</option>
-                    <option value="memanjang_2:1">Blok B: Deret 2 Terpisah (Lt. 1)</option>
-                    <option value="bertingkat:1">Blok C: Gedung Bertingkat (Lt. 1 / Bawah)</option>
-                    <option value="bertingkat:2">Blok C: Gedung Bertingkat (Lt. 2 / Atas)</option>
+                    <option value="bertingkat:1">Blok Bertingkat — Paling Kiri (Lt. 1 / Bawah)</option>
+                    <option value="bertingkat:2">Blok Bertingkat — Paling Kiri (Lt. 2 / Atas)</option>
+                    <option value="memanjang_4:1">Blok 4 Memanjang — Kanan Bertingkat (Lt. 1)</option>
+                    <option value="memanjang_2:1">Blok 2 Terpisah — Belakang Rumah Pemilik (Lt. 1)</option>
                   </select>
                 </div>
                 <div>
