@@ -206,11 +206,12 @@ async function getPgPool(): Promise<Pool> {
   }
   if (!globalRef.__ktaPool) {
     const isLocal = rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1');
-    // Bersihkan parameter sslmode agar tidak bentrok dengan ssl: { rejectUnauthorized: false } pada pg v8
+    // Bersihkan sslmode & channel_binding agar handshake SSL pg v8 mulus 100% dengan Neon & Supabase
     let connStr = rawUrl;
     try {
       const parsed = new URL(rawUrl);
       parsed.searchParams.delete('sslmode');
+      parsed.searchParams.delete('channel_binding');
       connStr = parsed.toString();
     } catch {
       connStr = rawUrl;
