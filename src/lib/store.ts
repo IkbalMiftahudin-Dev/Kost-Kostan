@@ -65,7 +65,15 @@ const DEFAULT_TENANTS: Array<{
 // POSTGRES POOL + IN-MEMORY DEMO FALLBACK
 // ============================================================================
 function getPostgresUrl(): string | null {
-  return process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || null;
+  const raw =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.SUPABASE_DB_URL ||
+    '';
+  const cleaned = raw.trim().replace(/^["']|["']$/g, '');
+  return cleaned || null;
 }
 
 export function getStorageMode(): StorageMode {
@@ -192,16 +200,27 @@ function getDemoState(): DemoState {
 }
 
 async function getPgPool(): Promise<Pool> {
-  const url = getPostgresUrl();
-  if (!url) {
+  const rawUrl = getPostgresUrl();
+  if (!rawUrl) {
     throw new Error('DATABASE_URL tidak ditemukan.');
   }
   if (!globalRef.__ktaPool) {
-    const isLocal = url.includes('localhost') || url.includes('127.0.0.1');
+    const isLocal = rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1');
+    // Bersihkan parameter sslmode agar tidak bentrok dengan ssl: { rejectUnauthorized: false } pada pg v8
+    let connStr = rawUrl;
+    try {
+      const parsed = new URL(rawUrl);
+      parsed.searchParams.delete('sslmode');
+      connStr = parsed.toString();
+    } catch {
+      connStr = rawUrl;
+    }
+
     globalRef.__ktaPool = new Pool({
-      connectionString: url,
+      connectionString: connStr,
       ssl: isLocal ? false : { rejectUnauthorized: false },
       max: 5,
+      connectionTimeoutMillis: 10000,
     });
   }
 
@@ -221,8 +240,10 @@ async function bootstrapPostgres(pool: Pool): Promise<void> {
       password_hash VARCHAR(255) NOT NULL,
       nama_lengkap VARCHAR(100) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
+    )
+  `);
 
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS units (
       id SERIAL PRIMARY KEY,
       nomor_unit INT NOT NULL UNIQUE,
@@ -238,8 +259,10 @@ async function bootstrapPostgres(pool: Pool): Promise<void> {
       warna_aksen VARCHAR(20) NOT NULL DEFAULT '#2563eb',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
+    )
+  `);
 
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS tenants (
       id SERIAL PRIMARY KEY,
       unit_id INT NOT NULL REFERENCES units(id) ON DELETE CASCADE,
@@ -252,8 +275,10 @@ async function bootstrapPostgres(pool: Pool): Promise<void> {
       catatan TEXT DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
+    )
+  `);
 
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS payments (
       id SERIAL PRIMARY KEY,
       unit_id INT NOT NULL REFERENCES units(id) ON DELETE CASCADE,
@@ -268,7 +293,7 @@ async function bootstrapPostgres(pool: Pool): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (unit_id, tenant_id, periode_bulan)
-    );
+    )
   `);
 
   const adminCheck = await pool.query('SELECT COUNT(*)::int AS cnt FROM admins');
