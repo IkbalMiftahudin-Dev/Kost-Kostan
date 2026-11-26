@@ -9,9 +9,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Kontrakan Teh Amoy — Tur 3D Interaktif & Manajemen Kost',
-  description:
-    'Sistem manajemen kontrakan modern dengan tampilan 3D interaktif (4 memanjang, 2 terpisah, 1 bawah + 2 bertingkat) dan dashboard admin lengkap.',
+  title: 'Kontrakan Teh Amoy',
+  description: 'Kontrakan Teh Amoy — Tur 3D Interaktif dan Informasi Ketersediaan Kontrakan.',
 };
 
 export const viewport: Viewport = {

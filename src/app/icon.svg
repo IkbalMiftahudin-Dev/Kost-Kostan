@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="ktaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="55%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="ktaRoof" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0f2fe"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#ktaBg)"/>
+  <!-- Modern House Roof -->
+  <path d="M12 31L32 14L52 31" fill="none" stroke="url(#ktaRoof)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- House Body -->
+  <path d="M18 29V48C18 49.6569 19.3431 51 21 51H43C44.6569 51 46 49.6569 46 48V29" fill="rgba(255,255,255,0.16)" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/>
+  <!-- Door -->
+  <rect x="27" y="37" width="10" height="14" rx="2" fill="#ffffff"/>
+  <!-- Window accent -->
+  <rect x="28" y="25" width="8" height="6" rx="1.5" fill="#bae6fd"/>
+</svg>

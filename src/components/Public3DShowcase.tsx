@@ -1,23 +1,19 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
-  Building2,
   ChevronLeft,
   ChevronRight,
   Compass,
   DoorOpen,
   Eye,
-  Home,
   Info,
   List,
   LogOut,
   MapPin,
   Moon,
   Search,
-  Shield,
   ShieldCheck,
   Sun,
   Tag,
@@ -293,11 +289,15 @@ export default function Public3DShowcase() {
       {/* Loading Overlay */}
       {loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/92 backdrop-blur-md px-6 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center mb-4 shadow-lg shadow-sky-500/10">
-            <Home className="w-7 h-7 text-sky-400 animate-bounce" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-400 via-blue-600 to-blue-900 border border-sky-300/40 flex items-center justify-center mb-4 shadow-xl shadow-sky-500/20 animate-bounce">
+            <svg viewBox="0 0 64 64" className="w-10 h-10">
+              <path d="M12 31L32 14L52 31" fill="none" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M18 29V48C18 49.7 19.3 51 21 51H43C44.7 51 46 49.7 46 48V29" fill="rgba(255,255,255,0.18)" stroke="#ffffff" strokeWidth="3.2" strokeLinejoin="round" />
+              <rect x="27" y="37" width="10" height="14" rx="2" fill="#ffffff" />
+            </svg>
           </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Kontrakan Teh Amoy 3D</h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1.5">Memuat 3 blok bangunan & ruangan 3D interaktif...</p>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Kontrakan Teh Amoy</h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1.5">Memuat tampilan 3D interaktif...</p>
         </div>
       )}
 
@@ -339,8 +339,12 @@ export default function Public3DShowcase() {
           </button>
 
           <div className="glass-panel px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl shadow-lg flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center text-white shadow shrink-0">
-              <Building2 className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 via-blue-600 to-blue-900 flex items-center justify-center text-white shadow shrink-0 border border-white/15">
+              <svg viewBox="0 0 64 64" className="w-5 h-5" aria-hidden="true">
+                <path d="M12 31L32 14L52 31" fill="none" stroke="#ffffff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M18 29V48C18 49.7 19.3 51 21 51H43C44.7 51 46 49.7 46 48V29" fill="rgba(255,255,255,0.2)" stroke="#ffffff" strokeWidth="3.5" strokeLinejoin="round" />
+                <rect x="27" y="37" width="10" height="14" rx="2" fill="#ffffff" />
+              </svg>
             </div>
             <div className="min-w-0">
               <div className="text-xs sm:text-sm font-extrabold text-white leading-tight truncate">Kontrakan Teh Amoy</div>
@@ -418,19 +422,11 @@ export default function Public3DShowcase() {
             target="_blank"
             rel="noreferrer"
             title="Buka Lokasi di Google Maps"
-            className="inline-flex items-center glass-panel hover:bg-slate-800/90 text-white px-2.5 sm:px-3 py-2.5 rounded-xl text-xs font-semibold shadow-lg transition"
+            className="inline-flex items-center bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white px-3 sm:px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 gap-1.5 transition"
           >
-            <MapPin className="w-3.5 h-3.5 text-rose-400" />
-            <span className="hidden lg:inline ml-1.5">Maps</span>
+            <MapPin className="w-3.5 h-3.5" />
+            <span>Lokasi</span>
           </a>
-
-          <Link
-            href="/admin"
-            className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white px-3 sm:px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition"
-          >
-            <Shield className="w-3.5 h-3.5" />
-            <span>Admin</span>
-          </Link>
         </div>
       </header>
 

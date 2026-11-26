@@ -544,24 +544,30 @@ export class Kontrakan3DScene {
 
     if (hasTiered) {
       const floor2Y = 0.08 + H + SLAB;
+      const rightWingLenZ = extraRightWings * W;
+      const rightWingCenterZ = lWingBaseZ - ((extraRightWings - 1) * W) / 2;
 
-      // Atap miring modern lisplang gelap berbentuk LETER L sejati (persis Foto 3!)
+      // 1. Atap Modern Leter L Presisi (sambungan rapi tepat di x = +2.80, elevasi rata di atas tembok -> 0% nembus dinding!)
       const lRoofGroup = new THREE.Group();
       this.worldGroup.add(lRoofGroup);
 
-      // Atap sayap belakang (di atas #08)
-      const backWingRoof = this._createModernSlantedRoof(tieredStartX + W / 2, floor2Y + H + 0.06, lBackZ + TD * 0.35, W + 0.7, D + TD + 1.2);
-      // Atap sayap kanan-depan (di atas #09 yang menghadap kiri -X)
-      const rightWingLenZ = extraRightWings * W;
-      const rightWingCenterZ = lWingBaseZ - ((extraRightWings - 1) * W) / 2;
-      const frontWingRoof = this._createModernSlantedRoof(
-        lWingX - TD * 0.35,
-        floor2Y + H + 0.06,
-        rightWingCenterZ,
-        rightWingDepthX + 0.85,
-        rightWingLenZ + 0.85
+      // Sayap kiri-belakang (x: -1.45 .. +2.80, z: -20.55 .. -11.45)
+      const backWingRoof = this._createCleanFlatModernRoof(
+        0.675,
+        floor2Y + H + 0.04,
+        -16.0,
+        4.25,
+        9.1
       );
-      lRoofGroup.add(backWingRoof, frontWingRoof);
+      // Sayap kanan-depan (x: +2.80 .. +11.80, z: mencakup seluruh unit kanan #09)
+      const rightWingRoof = this._createCleanFlatModernRoof(
+        7.3,
+        floor2Y + H + 0.04,
+        rightWingCenterZ,
+        9.0,
+        rightWingLenZ + 0.55
+      );
+      lRoofGroup.add(backWingRoof, rightWingRoof);
       this.blockRoofs.push(lRoofGroup);
 
       // Sayap Kiri Lantai 1: Halaman sudut L + Tangga Besi Hitam terbuka + Pagar Besi Hitam Berjaring
@@ -573,20 +579,20 @@ export class Kontrakan3DScene {
         this._createUnitRoom(unit, new THREE.Vector3(lWingX, 0.08, uz), null, {
           modernGreyExterior: true,
           rotationY: -Math.PI / 2,
-          photo3SideVent: idx === 0, // Jendela ventilasi kecil di dinding depan abu-abu (+Z) persis Foto 3!
+          photo3SideVent: idx === 0,
         });
       });
 
-      // Plat Lantai 2 berbentuk LETER L sejati
+      // Plat Lantai 2 berbentuk LETER L Presisi (sambungan rata di x = +2.80 tanpa tumpang tindih!)
       const slabMat = new THREE.MeshStandardMaterial({ color: 0x525860, roughness: 0.7 });
-      const backSlab = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, SLAB + 0.08, D + TD + 0.55), slabMat);
-      backSlab.position.set(tieredStartX + W / 2, 0.08 + H + SLAB / 2, lBackZ + TD / 2 + 0.05);
+      const backSlab = new THREE.Mesh(new THREE.BoxGeometry(4.15, SLAB + 0.06, 8.95), slabMat);
+      backSlab.position.set(0.725, 0.08 + H + SLAB / 2, -16.0);
       backSlab.castShadow = true;
       backSlab.receiveShadow = true;
       this.worldGroup.add(backSlab);
 
-      const rightSlab = new THREE.Mesh(new THREE.BoxGeometry(rightWingDepthX + 0.5, SLAB + 0.08, rightWingLenZ + 0.45), slabMat);
-      rightSlab.position.set(lWingX - TD / 2 - 0.05, 0.08 + H + SLAB / 2, rightWingCenterZ);
+      const rightSlab = new THREE.Mesh(new THREE.BoxGeometry(8.9, SLAB + 0.06, rightWingLenZ + 0.35), slabMat);
+      rightSlab.position.set(7.25, 0.08 + H + SLAB / 2, rightWingCenterZ);
       rightSlab.castShadow = true;
       rightSlab.receiveShadow = true;
       this.worldGroup.add(rightSlab);
@@ -892,29 +898,41 @@ export class Kontrakan3DScene {
   }
 
   /**
-   * Atap miring modern lisplang & soffit gelap untuk Gedung Bertingkat (persis Foto 3)
+   * Atap datar-modern rapi dengan lisplang abu gelap (tinggi merata di atas plafon -> 0% menembus dinding!)
    */
-  private _createModernSlantedRoof(cx: number, y: number, cz: number, width: number, depth: number) {
+  private _createCleanFlatModernRoof(cx: number, y: number, cz: number, width: number, depth: number) {
     const roofGroup = new THREE.Group();
     roofGroup.position.set(cx, y, cz);
 
-    const roofSlab = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 0.5, 0.24, depth + 0.6),
-      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.65 })
+    // Plafon / soffit bawah putih-abu
+    const soffit = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.14, depth),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.8 })
     );
-    roofSlab.rotation.x = -0.16;
-    roofSlab.position.set(0, 0.72, 0.12);
-    roofSlab.castShadow = true;
-    roofSlab.receiveShadow = true;
-    roofGroup.add(roofSlab);
+    soffit.position.set(0, 0.07, 0);
+    soffit.castShadow = true;
+    soffit.receiveShadow = true;
+    roofGroup.add(soffit);
 
-    const frontTrim = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 0.56, 0.44, 0.24),
+    // Lisplang beton modern abu-abu gelap rapi mengelilingi atap (tepat di batas width agar sambungan L mulus tanpa z-fighting)
+    const fascia = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.36, depth),
       new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.55 })
     );
-    frontTrim.position.set(0, 1.22, depth / 2 + 0.24);
-    frontTrim.castShadow = true;
-    roofGroup.add(frontTrim);
+    fascia.position.set(0, 0.32, 0);
+    fascia.castShadow = true;
+    fascia.receiveShadow = true;
+    roofGroup.add(fascia);
+
+    // Penutup atap baja gelap di bagian paling atas (rapi & seragam pada kedua sayap huruf L)
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(width - 0.24, 0.12, depth - 0.24),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
+    );
+    cap.position.set(0, 0.55, 0);
+    cap.castShadow = true;
+    cap.receiveShadow = true;
+    roofGroup.add(cap);
 
     return roofGroup;
   }
