@@ -32,6 +32,7 @@ export default function Public3DShowcase() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<Kontrakan3DScene | null>(null);
   const labelElsRef = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const ownerLabelRef = useRef<HTMLDivElement | null>(null);
   const showLabelsRef = useRef(true);
   const activeUnitRef = useRef<PublicUnit | null>(null);
 
@@ -84,6 +85,18 @@ export default function Public3DShowcase() {
       } else {
         el.classList.remove('hidden-label');
         el.style.transform = `translate3d(${item.x}px, ${item.y}px, 0) translate(-50%, -100%)`;
+      }
+    }
+
+    // Update posisi floating badge Rumah Utama (seragam dengan label kontrakan!)
+    const ownerEl = ownerLabelRef.current;
+    if (ownerEl) {
+      const lm = scene.getProjectedLandmarks().find((l) => l.key === 'rumah_utama');
+      if (hideAll || !lm || !lm.visible) {
+        ownerEl.classList.add('hidden-label');
+      } else {
+        ownerEl.classList.remove('hidden-label');
+        ownerEl.style.transform = `translate3d(${lm.x}px, ${lm.y}px, 0) translate(-50%, -100%)`;
       }
     }
   }, []);
@@ -208,6 +221,22 @@ export default function Public3DShowcase() {
 
       {/* 3D Projected Floating Labels */}
       <div id="labels-layer">
+        {/* Label Rumah Utama (desain seragam dengan penamaan kontrakan) */}
+        <div
+          ref={ownerLabelRef}
+          className="unit-label-3d hidden-label text-left !cursor-default !border-amber-400/60"
+        >
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[11px] sm:text-xs font-extrabold tracking-wide text-amber-300">RUMAH</span>
+            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span className="label-status-text">Utama</span>
+            </span>
+          </div>
+          <div className="text-[10px] sm:text-[11px] font-semibold text-white truncate mt-0.5">Rumah Punya Kost</div>
+          <div className="text-[9px] sm:text-[10px] font-medium text-amber-200/85 mt-0.5">Teh Amoy</div>
+        </div>
+
         {units.map((unit) => {
           const dotClass =
             unit.status === 'kosong'

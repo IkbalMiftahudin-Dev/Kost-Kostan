@@ -59,6 +59,13 @@ export interface ProjectedLabel {
   visible: boolean;
 }
 
+export interface ProjectedLandmark {
+  key: string;
+  x: number;
+  y: number;
+  visible: boolean;
+}
+
 export interface SceneCallbacks {
   onEnterUnit?: (unit: PublicUnit) => void;
   onExitUnit?: () => void;
@@ -107,6 +114,7 @@ export class Kontrakan3DScene {
   private porchLights: Array<{ light: THREE.PointLight; bulbMat: THREE.MeshStandardMaterial }> = [];
   private windowGlowMats: THREE.MeshPhysicalMaterial[] = [];
   private blockRoofs: THREE.Group[] = [];
+  private landmarkAnchors = new Map<string, THREE.Vector3>();
 
   public isNightMode = false;
   public isCutawayMode = false;
@@ -433,6 +441,7 @@ export class Kontrakan3DScene {
     this.porchLights = [];
     this.windowGlowMats = [];
     this.blockRoofs = [];
+    this.landmarkAnchors.clear();
 
     const tieredGroundUnits = units
       .filter((u) => u.blok === 'bertingkat' && Number(u.lantai) === 1)
@@ -477,65 +486,81 @@ export class Kontrakan3DScene {
     // Petak sawah hijau di bagian jauh utara (persis bagian atas Foto 1 Google Earth)
     this._createDistantRiceFields();
 
-    // Jalan Beton Utama vertikal (Utara-Selatan) tepat di depan Rumah Utama yang menghadap KANAN (+X)
+    // Jalan Gang Beton di pinggir Rumah Punya Kost (diperkecil jadi 2.8m — gang lingkungan seperti Foto 2)
     const roadMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.88 });
-    const mainRoad = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.06, 72), roadMat);
-    mainRoad.position.set(4.6, 0.0, 4);
+    const mainRoad = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.06, 70), roadMat);
+    mainRoad.position.set(2.9, 0.0, 4);
     mainRoad.receiveShadow = true;
     this.worldGroup.add(mainRoad);
 
-    // Jalan paving di depan Area Kost Utama (Gedung Bertingkat + 4 Kontrakan Berpagar)
-    const kostRoadZ = -6.0;
-    const kostRoadW = Math.max(tieredWidth + block4Width + 8, 30);
+    // Gang sempit di depan Kontrakan 4 & Gedung Bertingkat (diperkecil jadi 2.4m!)
+    const kostRoadZ = -7.2;
+    const kostRoadW = Math.max(tieredWidth + block4Width + 6, 28);
     const kostRoad = new THREE.Mesh(
-      new THREE.BoxGeometry(kostRoadW, 0.06, 5.2),
+      new THREE.BoxGeometry(kostRoadW, 0.06, 2.4),
       new THREE.MeshStandardMaterial({ map: this.paveTexture, color: 0xe2e8f0, roughness: 0.85 })
     );
     kostRoad.position.set(2.0 + kostRoadW / 2 - 4.0, 0.01, kostRoadZ);
     kostRoad.receiveShadow = true;
     this.worldGroup.add(kostRoad);
 
-    // Gang akses horizontal selatan Rumah Utama + Gang Barat tepat di depan Blok 2 yang menghadap KIRI (-X)
-    const frontGangZ = 16.4;
+    // Gang akses selatan Rumah Utama & Gang Barat depan Blok 2 (diperkecil jadi 2.2m)
+    const frontGangZ = 15.6;
     const frontGang = new THREE.Mesh(
-      new THREE.BoxGeometry(39, 0.06, 3.6),
+      new THREE.BoxGeometry(36, 0.06, 2.2),
       new THREE.MeshStandardMaterial({ map: this.paveTexture, color: 0xdbe3ec, roughness: 0.85 })
     );
     frontGang.position.set(-14.5, 0.01, frontGangZ);
     frontGang.receiveShadow = true;
     this.worldGroup.add(frontGang);
 
-    const westAlleyX = -32.2;
+    const westAlleyX = -31.6;
     const westAlley = new THREE.Mesh(
-      new THREE.BoxGeometry(3.8, 0.06, 26),
+      new THREE.BoxGeometry(2.2, 0.06, 24),
       new THREE.MeshStandardMaterial({ map: this.paveTexture, color: 0xdbe3ec, roughness: 0.85 })
     );
-    westAlley.position.set(westAlleyX, 0.01, 7.5);
+    westAlley.position.set(westAlleyX, 0.01, 7.8);
     westAlley.receiveShadow = true;
     this.worldGroup.add(westAlley);
 
     // =========================================================================
-    // 2. LINGKARAN KANAN-ATAS: GEDUNG BERTINGKAT (PERSIS FOTO 3) + 4 KONTRAKAN BERPAGAR DI KANANNYA
+    // 2. LINGKARAN KANAN-ATAS: GEDUNG BERTINGKAT LETER L (PERSIS FOTO 3) + 4 KONTRAKAN BERPAGAR
+    //    Bentuk Leter L:
+    //    - Sayap Kiri-Belakang (z = upperBlockZ - 1.6): Area Tangga Besi Hitam (Lt.1) + Unit #08 (Lt.2)
+    //    - Sayap Kanan-Depan (z = upperBlockZ + 1.4, menonjol maju +3.0m membentuk huruf L!):
+    //      Unit #07 (Lt.1) & Unit #09 (Lt.2) dengan balkon putih-abu berjenjang & pagar besi hitam di sudut L!
     // =========================================================================
     const upperBlockZ = -14.8;
     const tieredStartX = -1.2;
+    const lBackZ = upperBlockZ - 1.6;
+    const lFrontZ = upperBlockZ + 1.4;
 
     if (hasTiered) {
-      const tieredCenterX = tieredStartX + tieredWidth / 2;
       const floor2Y = 0.08 + H + SLAB;
 
-      // Atap miring modern lisplang & soffit gelap (persis Foto 3)
-      const upperRoof = this._createModernSlantedRoof(tieredCenterX, floor2Y + H + 0.06, upperBlockZ + TD * 0.35, tieredWidth + 0.9, D + TD + 1.35);
-      this.blockRoofs.push(upperRoof);
+      // Atap miring modern lisplang gelap berbentuk LETER L (persis Foto 3!)
+      const lRoofGroup = new THREE.Group();
+      this.worldGroup.add(lRoofGroup);
+      const backWingRoof = this._createModernSlantedRoof(tieredStartX + W / 2, floor2Y + H + 0.06, lBackZ + TD * 0.35, W + 0.7, D + TD + 1.15);
+      const frontWingW = Math.max(1, tieredBays - 1) * W;
+      const frontWingRoof = this._createModernSlantedRoof(
+        tieredStartX + W + frontWingW / 2,
+        floor2Y + H + 0.06,
+        lFrontZ + TD * 0.35,
+        frontWingW + 0.85,
+        D + TD + 1.25
+      );
+      lRoofGroup.add(backWingRoof, frontWingRoof);
+      this.blockRoofs.push(lRoofGroup);
 
-      // Area kiri lantai 1: Tangga Besi Hitam terbuka + Pagar Besi Hitam Berjaring dengan 1 daun gerbang terbuka (persis Foto 3!)
-      this._createPhoto3StaircaseAndGate(tieredStartX + W / 2, 0.08, upperBlockZ, floor2Y, tieredWidth);
+      // Sayap Kiri Lantai 1: Halaman sudut L + Tangga Besi Hitam terbuka + Pagar Besi Hitam berjaring (persis Foto 3!)
+      this._createPhoto3StaircaseAndGate(tieredStartX + W / 2, 0.08, lBackZ, floor2Y, tieredWidth, lFrontZ - lBackZ);
 
-      // Unit Lantai 1 Blok Bertingkat (#07 di bawah) + jendela ventilasi kecil di dinding samping abu-abu
+      // Sayap Kanan Lantai 1 (menonjol maju membentuk huruf L): Unit #07 di bawah
       tieredGroundUnits.forEach((unit, idx) => {
         const bayIdx = idx + 1;
         const ux = tieredStartX + bayIdx * W + W / 2;
-        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, upperBlockZ), null, {
+        this._createUnitRoom(unit, new THREE.Vector3(ux, 0.08, lFrontZ), null, {
           modernGreyExterior: true,
           photo3SideVent: idx === tieredGroundUnits.length - 1,
         });
@@ -543,26 +568,47 @@ export class Kontrakan3DScene {
 
       for (let bay = tieredGroundUnits.length + 1; bay < tieredBays; bay++) {
         const px = tieredStartX + bay * W + W / 2;
-        this._createSupportBay(px, 0.08, upperBlockZ, H + SLAB);
+        this._createSupportBay(px, 0.08, lFrontZ, H + SLAB);
       }
 
-      // Plat Lantai 2 abu-abu gelap overhanging (persis Foto 3)
-      const slabMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(tieredWidth + 0.4, SLAB + 0.08, D + TD + 0.55),
-        new THREE.MeshStandardMaterial({ color: 0x525860, roughness: 0.7 })
+      // Plat Lantai 2 berbentuk LETER L (sayap kiri mundur + sayap kanan menonjol maju)
+      const slabMat = new THREE.MeshStandardMaterial({ color: 0x525860, roughness: 0.7 });
+      const backSlab = new THREE.Mesh(new THREE.BoxGeometry(W + 0.35, SLAB + 0.08, D + TD + 0.5), slabMat);
+      backSlab.position.set(tieredStartX + W / 2, 0.08 + H + SLAB / 2, lBackZ + TD / 2 + 0.05);
+      backSlab.castShadow = true;
+      backSlab.receiveShadow = true;
+      this.worldGroup.add(backSlab);
+
+      const frontSlab = new THREE.Mesh(new THREE.BoxGeometry(frontWingW + 0.4, SLAB + 0.08, D + TD + 0.55), slabMat);
+      frontSlab.position.set(tieredStartX + W + frontWingW / 2, 0.08 + H + SLAB / 2, lFrontZ + TD / 2 + 0.05);
+      frontSlab.castShadow = true;
+      frontSlab.receiveShadow = true;
+      this.worldGroup.add(frontSlab);
+
+      // Balkon Parapet Putih-Abu berjenjang pada KEDUA sayap huruf L (persis Foto 3!)
+      // 1. Parapet kecil di puncak tangga sayap kiri-belakang (depan Unit #08)
+      this._createPhoto3BalconyParapet(tieredStartX, floor2Y, lBackZ + D / 2 + TD - 0.02, W, 1.35);
+      // 2. Parapet besar menonjol di sayap kanan-depan (depan Unit #09) + dinding samping L
+      this._createPhoto3BalconyParapet(tieredStartX + W, floor2Y, lFrontZ + D / 2 + TD - 0.02, frontWingW, 0);
+      // Sisi dalam huruf L menghubungkan balkon depan (#09) ke balkon belakang (#08)
+      const lInnerLen = lFrontZ - lBackZ;
+      this._addBox(
+        this.worldGroup,
+        0.16,
+        0.96,
+        lInnerLen + 0.2,
+        tieredStartX + W + 0.08,
+        floor2Y + 0.48,
+        lBackZ + D / 2 + TD + lInnerLen / 2,
+        new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.78 }),
+        true
       );
-      slabMesh.position.set(tieredCenterX, 0.08 + H + SLAB / 2, upperBlockZ + TD / 2 + 0.05);
-      slabMesh.castShadow = true;
-      slabMesh.receiveShadow = true;
-      this.worldGroup.add(slabMesh);
 
-      // Balkon Parapet Putih Berjenjang + Bingkai Abu Tua + Inset Railing Besi Hitam (persis Foto 3!)
-      this._createPhoto3BalconyParapet(tieredStartX, floor2Y, upperBlockZ + D / 2 + TD - 0.02, tieredWidth);
-
-      // Unit Lantai 2 (#08 & #09)
+      // Unit Lantai 2: Unit pertama (#08) di sayap kiri-belakang, unit berikutnya (#09, dst.) di sayap kanan-depan (Leter L!)
       tieredUpperUnits.forEach((unit, idx) => {
         const ux = tieredStartX + idx * W + W / 2;
-        this._createUnitRoom(unit, new THREE.Vector3(ux, floor2Y, upperBlockZ), upperRoof, { modernGreyExterior: true });
+        const uz = idx === 0 ? lBackZ : lFrontZ;
+        this._createUnitRoom(unit, new THREE.Vector3(ux, floor2Y, uz), lRoofGroup, { modernGreyExterior: true });
       });
     }
 
@@ -584,10 +630,11 @@ export class Kontrakan3DScene {
     }
 
     // =========================================================================
-    // 3. LINGKARAN TENGAH: RUMAH UTAMA MENGHADAP KE KANAN (+X) + TULISAN "RUMAH PUNYA KOST"
+    // 3. LINGKARAN TENGAH: RUMAH UTAMA MENGHADAP KANAN (+X) — PENAMAAN PAKAI FLOATING BADGE SEPERTI KONTRAKAN
     // =========================================================================
     const lowerRowZ = 8.4;
     this._createPhoto2MainHouse(-2.6, 0.08, lowerRowZ);
+    this.landmarkAnchors.set('rumah_utama', new THREE.Vector3(-2.6, 8.2, lowerRowZ));
 
     // =========================================================================
     // 4. 2 RUMAH PENGHALANG DI BELAKANG RUMAH UTAMA (ANTARA RUMAH UTAMA & BLOK 2)
@@ -596,15 +643,15 @@ export class Kontrakan3DScene {
       wallColor: 0xe2e8f0,
       roofColor: 0x7c2d12,
       trimColor: 0x64748b,
-      signTitle: 'RUMAH WARGA',
-      signSub: 'Penghalang 1',
+      signTitle: '',
+      signSub: '',
     });
     this._createDecorativeHouse(-17.4, 0.08, lowerRowZ - 0.2, 4.8, 3.3, 6.8, {
       wallColor: 0xf1f5f9,
       roofColor: 0x9a3412,
       trimColor: 0x78716c,
-      signTitle: 'RUMAH WARGA',
-      signSub: 'Penghalang 2',
+      signTitle: '',
+      signSub: '',
     });
 
     // =========================================================================
@@ -616,7 +663,6 @@ export class Kontrakan3DScene {
       const b2StartZ = lowerRowZ - actualB2Len / 2;
       const b2CenterZ = lowerRowZ;
 
-      // Atap terpisah memanjang sepanjang sumbu Z & menghadap ke KIRI (-X)
       const b2Roof = this._createPitchedRoof(b2X - TD * 0.35, H + 0.14, b2CenterZ, actualB2Len + 0.85, D + TD + 1.1, 1.45);
       b2Roof.rotation.y = -Math.PI / 2;
       b2Roof.add(this._createFascia(actualB2Len + 0.55));
@@ -632,22 +678,22 @@ export class Kontrakan3DScene {
     }
 
     // =========================================================================
-    // 6. RUMAH-RUMAH WARGA SEKITAR (PERSIS GOOGLE MAPS FOTO 1 & RUMAH HIJAU FOTO 2)
+    // 6. RUMAH-RUMAH WARGA SEKITAR (DIRAPATKAN KE TEPI GANG PERSIS GOOGLE MAPS!)
     // =========================================================================
     this._createSurroundingVillage(block4StartX + block4Width);
 
     // =========================================================================
-    // 7. PAPAN NAMA UTAMA, POHON & LAMPU JALAN
+    // 7. PAPAN NAMA UTAMA & LAMPU GANG
     // =========================================================================
-    this._createMainSignboard(10.5, 0.04, kostRoadZ + 3.4);
+    this._createMainSignboard(10.5, 0.04, kostRoadZ + 2.3);
 
-    this._createGardenLamp(7.5, 0.04, 15.0);
-    this._createGardenLamp(7.5, 0.04, 4.0);
-    this._createGardenLamp(7.5, 0.04, -5.5);
-    this._createGardenLamp(-14.0, 0.04, frontGangZ + 1.9);
-    this._createGardenLamp(westAlleyX - 1.8, 0.04, 8.4);
+    this._createGardenLamp(4.8, 0.04, 15.0);
+    this._createGardenLamp(4.8, 0.04, 4.0);
+    this._createGardenLamp(4.8, 0.04, -5.5);
+    this._createGardenLamp(-14.0, 0.04, frontGangZ + 1.4);
+    this._createGardenLamp(westAlleyX - 1.4, 0.04, 8.4);
 
-    const totalSpanW = Math.max(56, block4StartX + block4Width + 32);
+    const totalSpanW = Math.max(54, block4StartX + block4Width + 30);
     this.lastComplexWidth = totalSpanW;
     this.lastComplexCenterX = -2.0;
     this.lastComplexCenterZ = -2.0;
@@ -656,13 +702,12 @@ export class Kontrakan3DScene {
   }
 
   /**
-   * Rumah Utama Pemilik Kost (Persis Foto 2) — MENGHADAP KE KANAN (+X) ke jalan beton utama
-   * dengan tulisan jelas "RUMAH PUNYA KOST"
+   * Rumah Utama Pemilik Kost (Persis Foto 2) — MENGHADAP KE KANAN (+X) ke gang beton
+   * Tanpa banner 3D besar (penamaan memakai floating badge konsisten seperti kontrakan!)
    */
   private _createPhoto2MainHouse(cx: number, y: number, cz: number) {
     const grp = new THREE.Group();
     grp.position.set(cx, y, cz);
-    // Menghadap ke KANAN (+X) langsung ke jalan beton utama!
     grp.rotation.y = Math.PI / 2;
     this.worldGroup.add(grp);
 
@@ -677,17 +722,14 @@ export class Kontrakan3DScene {
     const h2 = 3.1;
     const totalH = h1 + h2;
 
-    // Badan utama 2 lantai abu-abu
     this._addBox(grp, w, totalH, d - 1.4, 0, totalH / 2, -0.7, greyLight, true);
 
-    // Lantai 1 teras terbuka depan + pilar abu tua + pagar besi hitam
     this._addBox(grp, w, 0.16, 1.8, 0, 0.08, d / 2 - 0.5, new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.8 }), true);
     this._addBox(grp, 0.28, h1, 0.28, -w / 2 + 0.18, h1 / 2, d / 2 + 0.25, greyDark, true);
     this._addBox(grp, 0.28, h1, 0.28, 0.2, h1 / 2, d / 2 + 0.25, greyDark, true);
     this._addBox(grp, 0.28, h1, 0.28, w / 2 - 0.18, h1 / 2, d / 2 + 0.25, greyDark, true);
     this._addBox(grp, 2.8, 1.05, 0.08, -1.2, 0.62, d / 2 + 0.22, ironMat, true);
 
-    // Lantai 2 Balkon abu-abu tua dengan 2 pilar & bingkai atas (persis Foto 2)
     this._addBox(grp, w + 0.15, 0.36, 1.9, 0, h1 + 0.18, d / 2 - 0.5, greyDark, true);
     this._addBox(grp, 0.32, h2, 1.7, -w / 2 + 0.16, h1 + h2 / 2, d / 2 - 0.5, greyDark, true);
     this._addBox(grp, 0.32, h2, 1.7, w / 2 - 0.16, h1 + h2 / 2, d / 2 - 0.5, greyDark, true);
@@ -695,7 +737,6 @@ export class Kontrakan3DScene {
     this._addBox(grp, w + 0.2, 0.55, 1.95, 0, totalH + 0.15, d / 2 - 0.48, greyDark, true);
     this._addBox(grp, 3.6, 2.0, 0.1, 0.6, h1 + 1.45, d / 2 - 1.38, darkGlass);
 
-    // Atap genteng merah miring
     const roofShape = new THREE.Shape();
     roofShape.moveTo(-d / 2, 0);
     roofShape.lineTo(0, 1.8);
@@ -709,7 +750,6 @@ export class Kontrakan3DScene {
     roofMesh.castShadow = true;
     grp.add(roofMesh);
 
-    // Toren air biru ikonik di atas atap (persis Foto 2!)
     const tank = new THREE.Mesh(
       new THREE.CylinderGeometry(0.46, 0.46, 1.05, 16),
       new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.35 })
@@ -736,59 +776,50 @@ export class Kontrakan3DScene {
     ]);
     banner.position.set(kioskX, 2.38, 3.05);
     grp.add(banner);
-
-    // Papan tulisan "RUMAH PUNYA KOST" di fasad depan menghadap jalan (+X) DAN di sisi selatan agar langsung terbaca dari kamera!
-    const mainSignTex = this._makeSignboardTexture('RUMAH PUNYA KOST', 'Teh Amoy • Pemilik Kontrakan', '#0f172a', '#1e3a8a', '#38bdf8');
-    const mainSignMat = new THREE.MeshStandardMaterial({ map: mainSignTex, roughness: 0.3 });
-    const frontSign = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.92, 0.08), [greyDark, greyDark, greyDark, greyDark, mainSignMat, greyDark]);
-    frontSign.position.set(0.1, h1 + 0.18, d / 2 + 0.48);
-    grp.add(frontSign);
-
-    // Plang tambahan di atas balkon menghadap kamera utama (+Z) supaya tulisan "RUMAH PUNYA KOST" langsung kelihatan jelas
-    const roofSign = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.05, 0.1), [greyDark, greyDark, greyDark, greyDark, mainSignMat, mainSignMat]);
-    roofSign.position.set(0, totalH + 1.55, 0);
-    roofSign.rotation.y = -Math.PI / 2;
-    grp.add(roofSign);
   }
 
   /**
-   * Membangun lingkungan rumah-rumah warga padat di sekeliling kompleks (persis Google Maps Foto 1 & Foto 2)
+   * Membangun lingkungan rumah-rumah warga padat rapat ke pinggir gang (persis Google Maps Foto 1 & Foto 2)
    */
   private _createSurroundingVillage(eastEdgeX: number) {
     const houseConfigs: Array<{ x: number; z: number; w: number; h: number; d: number; wall: number; roof: number; ry?: number }> = [
-      // Sisi kanan jalan utama (seberang Rumah Utama — termasuk rumah hijau 2 lantai persis Foto 2!)
-      { x: 11.2, z: 3.5, w: 5.4, h: 5.4, d: 6.4, wall: 0x86efac, roof: 0x3f6212, ry: -Math.PI / 2 }, // Rumah hijau 2 lantai Foto 2!
-      { x: 11.4, z: 11.5, w: 5.6, h: 3.2, d: 6.2, wall: 0xfef3c7, roof: 0x9a3412, ry: -Math.PI / 2 },
-      { x: 11.6, z: 19.2, w: 5.4, h: 3.3, d: 6.4, wall: 0xe2e8f0, roof: 0x7c2d12, ry: -Math.PI / 2 },
-      { x: 18.8, z: 4.0, w: 6.0, h: 3.2, d: 6.2, wall: 0xf1f5f9, roof: 0xb45309 },
-      { x: 19.2, z: 12.2, w: 5.8, h: 3.1, d: 6.0, wall: 0xfde68a, roof: 0x9a3412 },
-      { x: 25.8, z: 4.5, w: 5.6, h: 3.3, d: 6.2, wall: 0xe2e8f0, roof: 0x78350f },
-      { x: 25.5, z: 13.0, w: 6.0, h: 3.2, d: 6.4, wall: 0xf8fafc, roof: 0x9a3412 },
+      // Sisi kanan gang utama (rapat ke pinggir gang 2.8m — termasuk rumah hijau 2 lantai Foto 2!)
+      { x: 8.2, z: 3.5, w: 5.4, h: 5.4, d: 6.2, wall: 0x86efac, roof: 0x3f6212, ry: -Math.PI / 2 },
+      { x: 8.4, z: 11.2, w: 5.6, h: 3.2, d: 6.2, wall: 0xfef3c7, roof: 0x9a3412, ry: -Math.PI / 2 },
+      { x: 8.4, z: 18.8, w: 5.4, h: 3.3, d: 6.2, wall: 0xe2e8f0, roof: 0x7c2d12, ry: -Math.PI / 2 },
+      // Rumah warga seberang gang depan Kontrakan 4 (z = -2.2, membentuk koridor gang 2.4m yang realistis!)
+      { x: 15.6, z: -2.0, w: 6.0, h: 3.2, d: 5.8, wall: 0xf1f5f9, roof: 0xb45309 },
+      { x: 22.4, z: -2.0, w: 5.8, h: 3.3, d: 5.8, wall: 0xe2e8f0, roof: 0x78350f },
+      { x: 16.0, z: 5.6, w: 6.0, h: 3.2, d: 6.2, wall: 0xfde68a, roof: 0x9a3412 },
+      { x: 16.2, z: 13.4, w: 5.8, h: 3.1, d: 6.0, wall: 0xf8fafc, roof: 0x9a3412 },
+      { x: 23.0, z: 5.6, w: 5.8, h: 3.2, d: 6.2, wall: 0xfef3c7, roof: 0x7c2d12 },
+      { x: 23.0, z: 13.4, w: 6.0, h: 3.2, d: 6.2, wall: 0xe2e8f0, roof: 0x9a3412 },
 
-      // Barisan rumah warga selatan (bawah Foto 1)
-      { x: -3.0, z: 22.8, w: 6.2, h: 3.3, d: 6.2, wall: 0xfef3c7, roof: 0x9a3412 },
-      { x: -10.8, z: 22.8, w: 5.8, h: 3.1, d: 6.0, wall: 0xe2e8f0, roof: 0x7c2d12 },
-      { x: -18.2, z: 22.8, w: 5.8, h: 3.2, d: 6.2, wall: 0xf1f5f9, roof: 0xb45309 },
-      { x: -25.8, z: 22.6, w: 6.0, h: 3.1, d: 6.0, wall: 0xfde68a, roof: 0x9a3412 },
-      { x: -39.2, z: 16.5, w: 5.8, h: 3.2, d: 6.4, wall: 0xe2e8f0, roof: 0x7c2d12, ry: Math.PI / 2 },
-      { x: -39.2, z: 8.2, w: 5.8, h: 3.4, d: 6.4, wall: 0xfef3c7, roof: 0x9a3412, ry: Math.PI / 2 },
-      { x: -39.2, z: -0.2, w: 5.6, h: 3.1, d: 6.2, wall: 0xf1f5f9, roof: 0xb45309, ry: Math.PI / 2 },
+      // Barisan rumah warga selatan (rapat ke gang selatan 2.2m)
+      { x: -3.0, z: 20.6, w: 6.2, h: 3.3, d: 6.0, wall: 0xfef3c7, roof: 0x9a3412 },
+      { x: -10.8, z: 20.6, w: 5.8, h: 3.1, d: 5.8, wall: 0xe2e8f0, roof: 0x7c2d12 },
+      { x: -18.2, z: 20.6, w: 5.8, h: 3.2, d: 6.0, wall: 0xf1f5f9, roof: 0xb45309 },
+      { x: -25.8, z: 20.6, w: 6.0, h: 3.1, d: 5.8, wall: 0xfde68a, roof: 0x9a3412 },
+      // Seberang gang barat Blok 2 (rapat ke gang barat 2.2m)
+      { x: -36.8, z: 15.8, w: 5.6, h: 3.2, d: 6.2, wall: 0xe2e8f0, roof: 0x7c2d12, ry: Math.PI / 2 },
+      { x: -36.8, z: 8.2, w: 5.6, h: 3.4, d: 6.2, wall: 0xfef3c7, roof: 0x9a3412, ry: Math.PI / 2 },
+      { x: -36.8, z: 0.4, w: 5.6, h: 3.1, d: 6.0, wall: 0xf1f5f9, roof: 0xb45309, ry: Math.PI / 2 },
 
       // Rumah warga barat-utara (antara Blok 2 & Gedung Bertingkat seperti Foto 1)
-      { x: -11.8, z: -3.2, w: 5.8, h: 3.2, d: 6.2, wall: 0xf8fafc, roof: 0x9a3412 },
-      { x: -19.2, z: -3.2, w: 5.8, h: 3.3, d: 6.2, wall: 0xfef3c7, roof: 0x7c2d12 },
-      { x: -26.8, z: -3.5, w: 5.6, h: 3.1, d: 6.0, wall: 0xe2e8f0, roof: 0xb45309 },
-      { x: -11.5, z: -13.5, w: 6.2, h: 3.3, d: 6.4, wall: 0xf1f5f9, roof: 0x9a3412 },
-      { x: -19.5, z: -13.5, w: 6.0, h: 3.2, d: 6.4, wall: 0xfde68a, roof: 0x7c2d12 },
-      { x: -27.5, z: -13.5, w: 5.8, h: 3.1, d: 6.0, wall: 0xe2e8f0, roof: 0x9a3412 },
+      { x: -11.4, z: -2.4, w: 5.8, h: 3.2, d: 6.2, wall: 0xf8fafc, roof: 0x9a3412 },
+      { x: -18.8, z: -2.4, w: 5.8, h: 3.3, d: 6.2, wall: 0xfef3c7, roof: 0x7c2d12 },
+      { x: -26.2, z: -2.6, w: 5.6, h: 3.1, d: 6.0, wall: 0xe2e8f0, roof: 0xb45309 },
+      { x: -10.8, z: -13.5, w: 6.2, h: 3.3, d: 6.4, wall: 0xf1f5f9, roof: 0x9a3412 },
+      { x: -18.8, z: -13.5, w: 6.0, h: 3.2, d: 6.4, wall: 0xfde68a, roof: 0x7c2d12 },
+      { x: -26.8, z: -13.5, w: 5.8, h: 3.1, d: 6.0, wall: 0xe2e8f0, roof: 0x9a3412 },
 
       // Rumah warga belakang utara area kost (z = -25.5)
       { x: -2.0, z: -25.5, w: 6.2, h: 3.2, d: 6.0, wall: 0xe2e8f0, roof: 0x9a3412 },
       { x: 6.0, z: -25.5, w: 6.0, h: 3.3, d: 6.0, wall: 0xfef3c7, roof: 0x7c2d12 },
       { x: 14.0, z: -25.5, w: 6.2, h: 3.1, d: 6.0, wall: 0xf1f5f9, roof: 0xb45309 },
       { x: 22.0, z: -25.5, w: 5.8, h: 3.2, d: 6.0, wall: 0xe2e8f0, roof: 0x9a3412 },
-      { x: eastEdgeX + 5.8, z: -14.8, w: 5.6, h: 3.3, d: 6.4, wall: 0xfef3c7, roof: 0x7c2d12 },
-      { x: eastEdgeX + 5.8, z: -5.5, w: 5.6, h: 3.1, d: 6.0, wall: 0xf1f5f9, roof: 0x9a3412 },
+      { x: eastEdgeX + 5.6, z: -14.8, w: 5.6, h: 3.3, d: 6.4, wall: 0xfef3c7, roof: 0x7c2d12 },
+      { x: eastEdgeX + 5.6, z: -5.5, w: 5.6, h: 3.1, d: 6.0, wall: 0xf1f5f9, roof: 0x9a3412 },
     ];
 
     const winMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4 });
@@ -802,15 +833,12 @@ export class Kontrakan3DScene {
 
       const wallMat = new THREE.MeshStandardMaterial({ color: h.wall, roughness: 0.9 });
       this._addBox(grp, h.w, h.h, h.d, 0, h.h / 2, 0, wallMat, true);
-
-      // Pintu & jendela sederhana
       this._addBox(grp, 0.95, 1.95, 0.06, -h.w * 0.2, 1.0, h.d / 2 + 0.03, doorMat);
       this._addBox(grp, 1.1, 0.95, 0.06, h.w * 0.22, 1.55, h.d / 2 + 0.03, winMat);
       if (h.h > 4.5) {
         this._addBox(grp, 1.3, 1.0, 0.06, 0, h.h - 1.3, h.d / 2 + 0.03, winMat);
       }
 
-      // Atap genteng warga
       const rDepth = h.d + 1.0;
       const rHeight = 1.45;
       const shape = new THREE.Shape();
@@ -828,10 +856,8 @@ export class Kontrakan3DScene {
       grp.add(roof);
     });
 
-    // Beberapa pohon peneduh di sela-sela rumah warga
-    this._createTree(-6.5, 0, -2.5, 1.15);
-    this._createTree(15.2, 0, -2.0, 1.15);
-    this._createTree(-35.5, 0, 22.0, 1.25);
+    this._createTree(-6.2, 0, -2.5, 1.1);
+    this._createTree(-34.0, 0, 21.0, 1.2);
     this._createTree(eastEdgeX + 4.0, 0, -22.0, 1.3);
     this._createTree(-16.0, 0, -24.0, 1.2);
   }
@@ -858,7 +884,7 @@ export class Kontrakan3DScene {
     roofGroup.position.set(cx, y, cz);
 
     const roofSlab = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 0.6, 0.24, depth + 0.7),
+      new THREE.BoxGeometry(width + 0.5, 0.24, depth + 0.6),
       new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.65 })
     );
     roofSlab.rotation.x = -0.16;
@@ -867,23 +893,21 @@ export class Kontrakan3DScene {
     roofSlab.receiveShadow = true;
     roofGroup.add(roofSlab);
 
-    // Lisplang tebal abu gelap di tepi depan & samping kiri (persis kanopi tinggi Foto 3)
     const frontTrim = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 0.66, 0.44, 0.24),
+      new THREE.BoxGeometry(width + 0.56, 0.44, 0.24),
       new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.55 })
     );
-    frontTrim.position.set(0, 1.24, depth / 2 + 0.28);
+    frontTrim.position.set(0, 1.22, depth / 2 + 0.24);
     frontTrim.castShadow = true;
     roofGroup.add(frontTrim);
 
-    this.worldGroup.add(roofGroup);
     return roofGroup;
   }
 
   /**
-   * Tangga besi hitam terbuka di sisi kiri + pagar besi hitam berjaring dengan 1 pintu terbuka (persis Foto 3!)
+   * Tangga besi hitam terbuka di sudut L + pagar besi hitam berjaring sejajar sayap depan (persis Foto 3!)
    */
-  private _createPhoto3StaircaseAndGate(cx: number, y: number, cz: number, floor2Y: number, totalTieredW: number) {
+  private _createPhoto3StaircaseAndGate(cx: number, y: number, cz: number, floor2Y: number, totalTieredW: number, lFrontOffset = 3.0) {
     const W = this.ROOM_W;
     const D = this.ROOM_D;
     const TD = this.TERRACE_D;
@@ -896,23 +920,25 @@ export class Kontrakan3DScene {
     const ironMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.35 });
     const wallGrey = new THREE.MeshStandardMaterial({ color: 0x7c8288, roughness: 0.85 });
 
-    // Lantai halaman bawah
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.12, D + TD), new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.85 }));
-    floor.position.set(0, 0.05, TD / 2);
+    // Lantai halaman sudut L memanjang sampai garis pagar depan
+    const courtD = D + TD + lFrontOffset + 0.5;
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.12, courtD), new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.85 }));
+    floor.position.set(0, 0.05, (TD + lFrontOffset + 0.5) / 2);
     floor.receiveShadow = true;
     grp.add(floor);
 
-    // Dinding pembatas kiri abu-abu (persis tembok abu sisi kiri tangga di Foto 3)
+    // Tembok pembatas kiri abu-abu penuh sampai garis pagar depan (persis Foto 3)
     this._addBox(grp, 0.18, totalRise, D + TD, -W / 2 + 0.09, totalRise / 2, TD / 2, wallGrey, true);
+    this._addBox(grp, 0.18, 2.25, lFrontOffset + 0.5, -W / 2 + 0.09, 1.125, D / 2 + TD + (lFrontOffset + 0.5) / 2, wallGrey, true);
     this._addBox(grp, W, totalRise, 0.18, 0, totalRise / 2, -D / 2 + 0.09, wallGrey, true);
     this._addBox(grp, 0.28, totalRise, 0.28, W / 2 - 0.14, totalRise / 2, D / 2 + TD - 0.18, wallGrey, true);
 
-    // Tangga Besi Hitam Terbuka (anak tangga besi gelap + 2 stringer + railing besi hitam)
+    // Tangga Besi Hitam Terbuka menempel tembok kiri naik ke lantai 2 sayap belakang (#08)
     const steps = 13;
     const stepW = 1.15;
     const stepH = totalRise / steps;
-    const stairStartZ = D / 2 + TD + 0.35;
-    const stairRun = 4.4;
+    const stairStartZ = D / 2 + TD + lFrontOffset - 0.35;
+    const stairRun = 4.5;
     const stepD = stairRun / steps;
 
     for (let i = 0; i < steps; i++) {
@@ -934,10 +960,9 @@ export class Kontrakan3DScene {
     handrail.rotation.x = angle;
     grp.add(handrail);
 
-    // Pagar Besi Hitam Berjaring Depan (panel utama + 1 daun gerbang kiri terbuka seperti Foto 3!)
-    const gateZ = D / 2 + TD + 0.42;
+    // Pagar Besi Hitam Berjaring Depan sejajar sayap depan huruf L (persis Foto 3!)
+    const gateZ = D / 2 + TD + lFrontOffset + 0.35;
     const gateH = 1.28;
-    // Panel pagar utama (sisi tengah-kanan)
     const panelW = W - 1.25;
     const panelCenterX = 0.55;
     this._addBox(grp, panelW, 0.06, 0.06, panelCenterX, gateH, gateZ, ironMat);
@@ -970,12 +995,11 @@ export class Kontrakan3DScene {
   /**
    * Balkon Parapet Putih dengan Lis Abu-Abu Tua & Railing Besi Hitam Inset (Persis Foto 3!)
    */
-  private _createPhoto3BalconyParapet(startX: number, floorY: number, frontZ: number, totalWidth: number) {
+  private _createPhoto3BalconyParapet(startX: number, floorY: number, frontZ: number, totalWidth: number, opening = 1.45) {
     const whiteWall = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.78 });
     const greyTrim = new THREE.MeshStandardMaterial({ color: 0x525860, roughness: 0.65 });
     const ironMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.35 });
 
-    const opening = 1.45;
     const parapetW = Math.max(1.2, totalWidth - opening);
     const centerX = startX + opening + parapetW / 2;
 
@@ -983,7 +1007,7 @@ export class Kontrakan3DScene {
     this._addBox(this.worldGroup, parapetW + 0.08, 0.09, 0.2, centerX, floorY + 0.04, frontZ, greyTrim);
     this._addBox(this.worldGroup, parapetW + 0.08, 0.09, 0.2, centerX, floorY + 0.76, frontZ, greyTrim);
 
-    const pillarCount = Math.max(2, Math.floor(parapetW / 2.2));
+    const pillarCount = Math.max(1, Math.floor(parapetW / 2.2));
     for (let i = 0; i <= pillarCount; i++) {
       const px = startX + opening + (i / pillarCount) * parapetW;
       this._addBox(this.worldGroup, 0.46, 1.08, 0.18, px, floorY + 0.54, frontZ, whiteWall, true);
@@ -1055,19 +1079,21 @@ export class Kontrakan3DScene {
     roof.receiveShadow = true;
     grp.add(roof);
 
-    // Papan label kecil di fasad depan rumah supaya jelas di 3D overview
-    const signTex = this._makeSignboardTexture(opts.signTitle, opts.signSub, '#1e293b', '#334155', '#94a3b8');
-    const signW = Math.min(3.0, w * 0.68);
-    const signBoard = new THREE.Mesh(
-      new THREE.BoxGeometry(signW, 0.72, 0.06),
-      [
-        trimMat, trimMat, trimMat, trimMat,
-        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.45 }),
-        trimMat,
-      ]
-    );
-    signBoard.position.set(0, h - 0.48, d / 2 + 1.38);
-    grp.add(signBoard);
+    // Papan label kecil hanya jika ada signTitle
+    if (opts.signTitle) {
+      const signTex = this._makeSignboardTexture(opts.signTitle, opts.signSub, '#1e293b', '#334155', '#94a3b8');
+      const signW = Math.min(3.0, w * 0.68);
+      const signBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(signW, 0.72, 0.06),
+        [
+          trimMat, trimMat, trimMat, trimMat,
+          new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.45 }),
+          trimMat,
+        ]
+      );
+      signBoard.position.set(0, h - 0.48, d / 2 + 1.38);
+      grp.add(signBoard);
+    }
   }
 
   private _updateResponsiveCameraFraming(applyImmediately = false) {
@@ -1972,6 +1998,25 @@ export class Kontrakan3DScene {
       const visible = vec.z < 1 && vec.x >= -1.15 && vec.x <= 1.15 && vec.y >= -1.15 && vec.y <= 1.15;
       results.push({
         id,
+        x: (vec.x * 0.5 + 0.5) * width,
+        y: (-vec.y * 0.5 + 0.5) * height,
+        visible,
+      });
+    }
+    return results;
+  }
+
+  public getProjectedLandmarks(): ProjectedLandmark[] {
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    const results: ProjectedLandmark[] = [];
+
+    for (const [key, anchor] of this.landmarkAnchors.entries()) {
+      const vec = anchor.clone();
+      vec.project(this.camera);
+      const visible = vec.z < 1 && vec.x >= -1.15 && vec.x <= 1.15 && vec.y >= -1.15 && vec.y <= 1.15;
+      results.push({
+        key,
         x: (vec.x * 0.5 + 0.5) * width,
         y: (-vec.y * 0.5 + 0.5) * height,
         visible,
