@@ -33,15 +33,15 @@ interface SeedUnit {
 }
 
 const DEFAULT_UNITS: SeedUnit[] = [
-  { nomor_unit: 1, nama_unit: 'Kontrakan 01', blok: 'memanjang_4', lantai: 1, urutan: 1, harga_bulanan: 850000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik', deskripsi: 'Unit terdepan Blok A (deret 4 memanjang), akses dekat gerbang utama.', warna_aksen: '#2563eb' },
-  { nomor_unit: 2, nama_unit: 'Kontrakan 02', blok: 'memanjang_4', lantai: 1, urutan: 2, harga_bulanan: 850000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik', deskripsi: 'Unit Blok A (deret 4 memanjang), sirkulasi udara lancar dan bersih.', warna_aksen: '#0d9488' },
-  { nomor_unit: 3, nama_unit: 'Kontrakan 03', blok: 'memanjang_4', lantai: 1, urutan: 3, harga_bulanan: 850000, status: 'kosong', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik', deskripsi: 'Unit kosongan bersih siap huni di Blok A (deret 4 memanjang).', warna_aksen: '#16a34a' },
-  { nomor_unit: 4, nama_unit: 'Kontrakan 04', blok: 'memanjang_4', lantai: 1, urutan: 4, harga_bulanan: 900000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik 1300W', deskripsi: 'Unit pojok Blok A (deret 4 memanjang) dengan privasi lebih nyaman.', warna_aksen: '#d97706' },
-  { nomor_unit: 5, nama_unit: 'Kontrakan 05', blok: 'memanjang_2', lantai: 1, urutan: 1, harga_bulanan: 900000, status: 'kosong', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik 1300W', deskripsi: 'Unit kosongan di Blok B (bangunan 2 unit terpisah dari deret 4), lebih tenang.', warna_aksen: '#7c3aed' },
-  { nomor_unit: 6, nama_unit: 'Kontrakan 06', blok: 'memanjang_2', lantai: 1, urutan: 2, harga_bulanan: 950000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik 1300W', deskripsi: 'Unit Blok B (bangunan 2 unit terpisah), akses teras lega dan nyaman.', warna_aksen: '#e11d48' },
-  { nomor_unit: 7, nama_unit: 'Kontrakan 07 (Bawah)', blok: 'bertingkat', lantai: 1, urutan: 1, harga_bulanan: 1000000, status: 'terisi', ukuran: '4 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Teras Teduh', deskripsi: 'Unit lantai bawah bangunan bertingkat, teduh sepanjang hari tanpa tangga.', warna_aksen: '#0284c7' },
-  { nomor_unit: 8, nama_unit: 'Kontrakan 08 (Atas)', blok: 'bertingkat', lantai: 2, urutan: 1, harga_bulanan: 900000, status: 'terisi', ukuran: '3.8 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Balkon Atas', deskripsi: 'Unit lantai 2 dengan balkon menghadap halaman, sejuk dan bebas bising.', warna_aksen: '#ea580c' },
-  { nomor_unit: 9, nama_unit: 'Kontrakan 09 (Atas)', blok: 'bertingkat', lantai: 2, urutan: 2, harga_bulanan: 950000, status: 'kosong', ukuran: '3.8 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Balkon Sudut', deskripsi: 'Unit kosongan lantai 2 pojok atas dengan ventilasi sejuk dan terbuka.', warna_aksen: '#4f46e5' },
+  { nomor_unit: 1, nama_unit: 'Kontrakan 01', blok: 'memanjang_4', lantai: 1, urutan: 1, harga_bulanan: 550000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Pagar Depan, Token Listrik', deskripsi: 'Unit terdepan deret 4 melebar berpagar dengan fasilitas WiFi.', warna_aksen: '#2563eb' },
+  { nomor_unit: 2, nama_unit: 'Kontrakan 02', blok: 'memanjang_4', lantai: 1, urutan: 2, harga_bulanan: 550000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Pagar Depan, Token Listrik', deskripsi: 'Unit deret 4 melebar berpagar, sirkulasi udara lancar dan tersedia WiFi.', warna_aksen: '#0d9488' },
+  { nomor_unit: 3, nama_unit: 'Kontrakan 03', blok: 'memanjang_4', lantai: 1, urutan: 3, harga_bulanan: 550000, status: 'kosong', ukuran: '3.5 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Pagar Depan, Token Listrik', deskripsi: 'Unit kosongan bersih siap huni di deret 4 melebar berpagar + Free WiFi.', warna_aksen: '#16a34a' },
+  { nomor_unit: 4, nama_unit: 'Kontrakan 04', blok: 'memanjang_4', lantai: 1, urutan: 4, harga_bulanan: 550000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Pagar Depan, Token Listrik', deskripsi: 'Unit pojok deret 4 melebar berpagar dengan privasi nyaman dan Free WiFi.', warna_aksen: '#d97706' },
+  { nomor_unit: 5, nama_unit: 'Kontrakan 05', blok: 'memanjang_2', lantai: 1, urutan: 1, harga_bulanan: 550000, status: 'kosong', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik', deskripsi: 'Unit kosongan di Blok 2 terpisah belakang rumah utama, suasana tenang.', warna_aksen: '#7c3aed' },
+  { nomor_unit: 6, nama_unit: 'Kontrakan 06', blok: 'memanjang_2', lantai: 1, urutan: 2, harga_bulanan: 550000, status: 'terisi', ukuran: '3.5 x 7 m', fasilitas: 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Token Listrik', deskripsi: 'Unit di Blok 2 terpisah belakang rumah utama, nyaman dan bebas bising.', warna_aksen: '#e11d48' },
+  { nomor_unit: 7, nama_unit: 'Kontrakan 07 (Bawah)', blok: 'bertingkat', lantai: 1, urutan: 1, harga_bulanan: 550000, status: 'terisi', ukuran: '4 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Halaman Berpagar', deskripsi: 'Unit lantai bawah gedung bertingkat leter L, teduh sepanjang hari dan tersedia WiFi.', warna_aksen: '#0284c7' },
+  { nomor_unit: 8, nama_unit: 'Kontrakan 08 (Atas)', blok: 'bertingkat', lantai: 2, urutan: 1, harga_bulanan: 550000, status: 'terisi', ukuran: '3.8 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Balkon Atas', deskripsi: 'Unit lantai 2 gedung bertingkat leter L di puncak tangga, sejuk dan tersedia WiFi.', warna_aksen: '#ea580c' },
+  { nomor_unit: 9, nama_unit: 'Kontrakan 09 (Atas)', blok: 'bertingkat', lantai: 2, urutan: 2, harga_bulanan: 550000, status: 'kosong', ukuran: '3.8 x 7 m', fasilitas: 'Free WiFi, Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam, Balkon Leter L', deskripsi: 'Unit kosongan lantai 2 sayap depan leter L dengan balkon luas dan Free WiFi.', warna_aksen: '#4f46e5' },
 ];
 
 const DEFAULT_TENANTS: Array<{
@@ -107,7 +107,10 @@ interface DemoPayment {
   status: PaymentStatus;
   catatan: string;
 }
+const DEMO_SEED_VERSION = 2;
+
 interface DemoState {
+  seedVersion: number;
   admins: DemoAdmin[];
   units: DemoUnit[];
   tenants: DemoTenant[];
@@ -118,7 +121,9 @@ interface DemoState {
 }
 
 function getDemoState(): DemoState {
-  if (globalRef.__ktaDemo) return globalRef.__ktaDemo;
+  if (globalRef.__ktaDemo && globalRef.__ktaDemo.seedVersion === DEMO_SEED_VERSION) {
+    return globalRef.__ktaDemo;
+  }
 
   const period = getCurrentPeriod();
   const units: DemoUnit[] = DEFAULT_UNITS.map((u, i) => ({ ...u, id: i + 1 }));
@@ -166,6 +171,7 @@ function getDemoState(): DemoState {
   }
 
   globalRef.__ktaDemo = {
+    seedVersion: DEMO_SEED_VERSION,
     admins: [
       {
         id: 1,
@@ -224,7 +230,7 @@ async function bootstrapPostgres(pool: Pool): Promise<void> {
       blok VARCHAR(20) NOT NULL DEFAULT 'memanjang_4',
       lantai SMALLINT NOT NULL DEFAULT 1,
       urutan INT NOT NULL DEFAULT 1,
-      harga_bulanan INT NOT NULL DEFAULT 850000,
+      harga_bulanan INT NOT NULL DEFAULT 550000,
       status VARCHAR(20) NOT NULL DEFAULT 'kosong',
       ukuran VARCHAR(50) NOT NULL DEFAULT '3.5 x 7 m',
       fasilitas TEXT DEFAULT '',
@@ -310,7 +316,7 @@ async function bootstrapPostgres(pool: Pool): Promise<void> {
       await pool.query(
         `INSERT INTO payments (unit_id, tenant_id, periode_bulan, jatuh_tempo, nominal, tanggal_bayar, metode_bayar, status, catatan)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
-        [unitId, tenantId, period, dueDate, priceByNum.get(t.nomor_unit) || 850000, tglBayar, t.metode, t.pay_status, catatan]
+        [unitId, tenantId, period, dueDate, priceByNum.get(t.nomor_unit) || 550000, tglBayar, t.metode, t.pay_status, catatan]
       );
     }
   }
@@ -496,7 +502,7 @@ export async function createUnit(input: {
   const validBlocks: UnitBlock[] = ['memanjang_4', 'memanjang_2', 'bertingkat'];
   const blok: UnitBlock = validBlocks.includes(input.blok as UnitBlock) ? (input.blok as UnitBlock) : 'memanjang_4';
   const lantai = blok === 'bertingkat' ? Math.max(1, Math.min(2, Number(input.lantai || 2))) : 1;
-  const harga = Math.max(0, Number(input.harga_bulanan ?? 850000));
+  const harga = Math.max(0, Number(input.harga_bulanan ?? 550000));
   const status: UnitStatus = input.status === 'maintenance' ? 'maintenance' : 'kosong';
   const ukuran = (input.ukuran || '3.5 x 7 m').trim() || '3.5 x 7 m';
   const fasilitas = (input.fasilitas || 'Ruang Depan, Ruang Tengah, Dapur Meja Cor, Kamar Mandi Dalam').trim();
